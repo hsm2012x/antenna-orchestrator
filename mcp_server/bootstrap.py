@@ -123,10 +123,12 @@ def _install_figures_bg(vpy: Path, data_dir: Path) -> None:
     )
     # 부모(이 부트스트랩) 수명과 무관하게 살아남도록 자식을 분리한다 —
     # 짧은 세션이라도 설치가 끊기지 않게. 실패하면 표식이 없어 다음 세션이 다시 시도한다.
+    # ★ Windows: DETACHED_PROCESS 는 **검은 콘솔 창**을 새로 띄운다 — 쓰지 않는다.
+    #   CREATE_NO_WINDOW 로 창 없이 돌리고, CREATE_NEW_PROCESS_GROUP 로 부모와 독립시킨다.
     detach = {}
     if os.name == "nt":
-        # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
-        detach["creationflags"] = 0x00000008 | 0x00000200
+        # CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP
+        detach["creationflags"] = 0x08000000 | 0x00000200
     else:
         detach["start_new_session"] = True
     try:
