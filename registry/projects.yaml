@@ -1,0 +1,77 @@
+# registry/projects.yaml — 사람·프로젝트·자산 등록 정본 (project_registry_contract)
+#
+# 왜 products.yaml 과 나누나
+#   `products.yaml` 은 **임계·예산의 유일한 주입원**이다. 조직·사람·등록을 거기 섞으면
+#   "임계가 어디서 왔나"를 읽을 때 관계없는 것을 헤치고 가야 한다.
+#
+# ★ 이 파일이 **적지 않는** 것 (2026-07-31 정정)
+#   판본 사이의 **차이를 적지 않는다.** "v2 는 Dk 를 바꿨다" 같은 서술은 여기 오지 않는다.
+#   차이는 **추출값에서 나온다** — `python tools/assets.py diff <identity>`.
+#   왜냐하면 차이가 곧 노하우이고, 노하우는 **사람이 요약한 문장이 아니라 실제로 바뀐 값**
+#   이어야 다음 사람이 쓸 수 있기 때문이다. 선언으로 적으면 실물과 어긋나도 아무도 모른다.
+#
+#   여기 적는 것은 **정체성**뿐이다 — 어느 안테나의 몇 번째 등록인가.
+#
+# 초안 2026-07-31 · 확정: 사람
+
+spec_version: "2026-08-03"      # 담당·요구사항 확정(사용자)
+
+# ── 사람 ────────────────────────────────────────────────────────────────────
+# 사람을 고르면 그 사람의 프로젝트·대역이 선택지로 뜬다(양방향 색인).
+people:
+  example_owner:
+    name: "담당자 이름 (견본)"
+    title: "직함"
+    team: EXAMPLE_TEAM
+    projects: [marine_radar]
+    bands: [X, Ku]          # Ku 는 아직 등록된 자산이 없다 — 선택지로만 뜬다
+    확정: "견본 — 실제 등재 시 산지를 적는다"
+    # 연락처는 적지 않는다. 파이프라인이 쓰지 않는 값이고, 적어 두면 관리 대상만 는다.
+
+teams:
+  EXAMPLE_TEAM:
+    label: "예시 팀 (견본)"
+    members: [example_owner]
+    projects: [marine_radar]
+
+# ── 프로젝트 ────────────────────────────────────────────────────────────────
+projects:
+  marine_radar:
+    label: "Marine Radar"
+    team: EXAMPLE_TEAM
+    people: [example_owner]
+    bands: [X]
+    band_profile: marine_radar        # X 안의 9.3~9.5 GHz
+    product: example_x_band           # products.yaml 의 제품군 — **임계·요구사항은 그쪽이 정본**
+    f0_ghz: 9.4                       # 타겟 주파수(참고). 정본은 products.yaml
+    요구사항: "products.yaml example_x_band.requirements — 게인·반사손실·SLL·HBW·VBW 5종"
+    stage: antenna
+    planned_kinds: [antenna, pcb, power_board]
+
+# ── 안테나 계열(identity) — "어느 안테나인가" ────────────────────────────────
+# 정체성 = 프로젝트 + 종류 + 대역. 같은 정체성에 등록이 여러 번 쌓인다.
+identities:
+  marine_radar_antenna_x:
+    label: "Marine Radar X 대역 안테나"
+    project: marine_radar
+    kind: antenna
+    band: X
+    band_profile: marine_radar
+    people: [example_owner]
+
+# ── 등록(registration) — "몇 번째 등록인가" ──────────────────────────────────
+# version 은 **등록 순번**이다. 설계 판올림 번호가 아니다.
+# 차이는 여기 적지 않는다 — 추출값 대조가 말한다(머리말 참조).
+registrations:
+  - {identity: marine_radar_antenna_x, version: 1, asset_id: null,
+     source_path: null, registered_at: null, note: "확정: 사람 — 원천 경로를 넣고 run"}
+  - {identity: marine_radar_antenna_x, version: 2, asset_id: null,
+     source_path: null, registered_at: null, note: "확정: 사람"}
+
+규율:
+  등록: "version 은 등록 순번이다. 같은 정체성에 등록할 때마다 1씩 는다"
+  차이: >
+    판본 사이의 차이는 **선언하지 않고 추출값에서 뽑는다**(assets.py diff).
+    사람이 시행착오로 얻은 값이 노하우이므로, 요약 문장이 아니라 **바뀐 값 그 자체**가
+    남아야 한다. 선언으로 적으면 실물과 어긋나도 드러나지 않는다.
+  해석: "차이가 왜 생겼는지는 해석이다 — 도구는 무엇이 달라졌는지까지만 말한다"

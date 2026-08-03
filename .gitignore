@@ -1,0 +1,23 @@
+# 산출물 — 레포에 넣지 않는다. ORCH_DATA_DIR 쪽에 쌓인다.
+work/
+out/
+checkpoints/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite-journal
+
+# 실제 선언값 — 사람이 말한 제품 값은 공개 레포에 남기지 않는다
+registry/declared/*.yaml
+
+# 파이썬
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# 편집기·OS
+.DS_Store
+.idea/
+.vscode/

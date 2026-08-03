@@ -1,0 +1,115 @@
+# registry/asset_kinds.yaml — 자산 종류 어휘 (asset_kind_contract)
+#
+# 왜 필요한가 — 종류가 **무엇을 기대할지**를 정한다.
+#   지금 자산 DB 의 보유 행렬은 "안테나에 이 역할이 없다"를 전부 똑같이 보여준다.
+#   그런데 기구물(Mockup)에 배열 주기가 없는 것은 **정상**이고, 안테나에 없는 것은 **공백**이다.
+#   종류가 없으면 이 둘을 구별할 수 없다 → 경고가 배경이 되고 아무도 안 본다.
+#
+# 그래서 종류마다 `expected_roles` 를 둔다. 보유 행렬이 이것으로 걸러진다.
+#
+# ★ 확정 2026-08-03 (사용자) — 제안 4종은 **전부 구매품**이다
+#   "Rotary joint · Radome · Waveguide · Test fixture 전부 외부 제품을 사서 쓰는 경우"
+#
+#   이 한마디가 종류의 성격을 바꾼다. 사내 설계 자산이 아니라 **구매 부품**이므로 —
+#     · 값의 산지가 다르다 — CST·도면이 아니라 **공급사 데이터시트**다
+#     · `expected_roles` 는 설계 산출이 아니라 **데이터시트에서 옮겨 적을 항목**이다
+#     · 원천 폴더에 CAD 가 있어도 그것은 **참고 형상**이지 설계 정본이 아니다
+#   그래서 `sourcing: purchased` 를 붙인다. 보유 행렬이 "값이 없다"를 다르게 읽어야 한다 —
+#   구매품에 설계값이 없는 것은 **공백이 아니라 정상**이고, 없는 것은 데이터시트다.
+#
+#   ★ **현재 파이프라인은 이 넷을 처리하지 못한다**(사용자 확인). 어휘에는 올리되
+#     `pipeline_ready: false` 로 표시한다 — 종류가 있다고 처리된다고 오해하면 안 된다.
+#
+# ★ 사용자 요청 목록에 더한 것과 그 이유 (보완)
+#   Radome · Rotary joint  해상 레이더는 회전한다. 레이돔과 로터리 조인트가 전기적 성능에
+#                          직접 관여하므로 자산이어야 한다(감쇠·정재파)
+#   Waveguide · Cable      급전 경로. 안테나 성능 해석의 입력이 된다
+#   Test fixture           측정 결과의 해석이 치구에 달린다 — 실측 대비 시뮬 차이의 흔한 원인
+#   Simulation model       CST 프로젝트 자체를 자산으로 볼 자리(현재 entry.kind 와 겹침 — 통합 검토)
+#   ↑ 넷은 **제안**이다. 필요 없으면 지운다. 없는 종류를 만들어 두면 분류가 흐려진다.
+#
+# 초안 2026-07-31 · 확정: 사람
+
+spec_version: "2026-08-03"      # 제안 4종 확정(사용자) — 전부 구매품
+
+# 구매품 공통 — 값이 어디서 오는가
+purchased_contract:
+  값_산지: "공급사 데이터시트 — 사내 CST·도면이 아니다"
+  기대: "설계값이 없는 것은 **공백이 아니라 정상**이다. 없는 것은 데이터시트다"
+  현재: "pipeline_ready=false — 데이터시트 판독 레인이 없다. 사람이 값을 넣는다"
+
+kinds:
+
+  antenna:
+    label: "안테나"
+    lanes: [cst, dxf, dwg, gerber]
+    expected_roles:
+      - band_lo_ghz
+      - band_hi_ghz
+      - n_elements
+      - array_pitch_mm
+      - t_sub_mm
+      - material_er
+      - n_ports
+    note: "전기 성능이 본체. 대역·소자·급전이 없으면 공백이다"
+
+  pcb:
+    label: "PCB (회로기판)"
+    lanes: [gerber, dxf, dwg]
+    expected_roles: [n_layers, t_sub_mm, material_er, bbox_x_mm, bbox_y_mm]
+    note: "층 구성과 스택업이 본체. 배열 주기는 기대하지 않는다"
+
+  power_board:
+    label: "전원 보드"
+    lanes: [gerber, dxf]
+    expected_roles: [n_layers, bbox_x_mm, bbox_y_mm]
+    note: "RF 역할을 기대하지 않는다 — 없는 것이 정상이다"
+
+  rf_module:
+    label: "RF 모듈"
+    lanes: [gerber, cst, dxf]
+    expected_roles: [band_lo_ghz, band_hi_ghz, n_ports, port_impedance_ohm]
+
+  mockup:
+    label: "기구 목업"
+    lanes: [dwg, dxf]
+    expected_roles: [bbox_x_mm, bbox_y_mm]
+    note: "전기 역할을 기대하지 않는다. 형상·간섭이 본체"
+
+  print_3d:
+    label: "3D 프린트"
+    lanes: [dwg, dxf]
+    expected_roles: [bbox_x_mm, bbox_y_mm]
+    note: "시제품 검증용. 재질 유전율이 있으면 전파에 영향 — 있으면 적는다"
+
+  # ── 아래 넷 — 확정됨. 전부 **구매품**이고 아직 파이프라인이 못 다룬다 ──────
+  radome:
+    label: "레이돔"
+    sourcing: purchased
+    pipeline_ready: false
+    lanes: [dwg, dxf, cst]
+    expected_roles: [material_er, t_sub_mm, bbox_x_mm]
+    note: "두께와 유전율이 통과 손실을 정한다 — 안테나 성능의 일부다"
+
+  rotary_joint:
+    sourcing: purchased
+    pipeline_ready: false
+    label: "로터리 조인트"
+    lanes: [dwg, dxf]
+    expected_roles: [port_impedance_ohm, band_lo_ghz, band_hi_ghz]
+    note: "회전 레이더의 급전 경로. 정재파·삽입손실이 여기서 생긴다"
+
+  waveguide:
+    sourcing: purchased
+    pipeline_ready: false
+    label: "도파관 · 급전 경로"
+    lanes: [dwg, dxf, cst]
+    expected_roles: [port_impedance_ohm, band_lo_ghz, band_hi_ghz]
+
+  test_fixture:
+    sourcing: purchased
+    pipeline_ready: false
+    label: "측정 치구"
+    lanes: [dwg, dxf]
+    expected_roles: [bbox_x_mm, bbox_y_mm]
+    note: "실측이 시뮬과 다를 때 가장 먼저 의심할 자리 — 자산으로 남겨야 추적된다"

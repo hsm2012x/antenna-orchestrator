@@ -1,0 +1,613 @@
+# registry/document_spec.yaml — 안테나 통합 문서의 **양식 정본** (document_spec_contract)
+#
+# 성격: 문서의 골조를 코드가 아니라 **데이터**로 둔다. 절 순서·어떤 역할이 어느 절에 가는지·
+#       표인지 목록인지 행렬인지·그림이 어느 절에 붙는지·LLM 이 어디에 무엇을 쓰는지가
+#       전부 여기 있다. `tools/catalog.py` 에 박혀 있던 SKELETON_SECTIONS 를 대체한다.
+#
+# 읽는 순서가 곧 구조다 (08-03-2 사용자 확정)
+#   1 요약 — 무엇에 쓰는 안테나이고 어느 대역이며 성능 목표가 무엇인가. **형상 preview 를
+#     여기서 먼저 보여준다.** 문서를 열자마자 알아볼 수 있어야 한다.
+#   2 시제품 · 도면 — 실물과 도면. 종이 위 설계가 아니라는 증거를 앞에 둔다.
+#   3~ 상세 — 요구 · 형상 · 재질 · 급전 · 계산 · 시뮬 · 시험 · 대조 · 패턴 · 표기 · 메타
+#   마지막 업데이트 필요 — **빈 절을 절마다 찍지 않고 여기 한 곳에 모은다.**
+#
+# 규율 여섯
+#   1) 여기에 **값을 쓰지 않는다.** 역할 이름만 쓴다 — 값은 카탈로그가, 카탈로그는 도구가 만든다.
+#   2) `roles`·`columns`·`figures` 의 이름은 `tools/roles.py` 어휘에 있어야 한다.
+#      없으면 docspec 이 거부한다 — 오타로 절이 통째로 비는 것을 막는다(I-A).
+#   3) `prose` 슬롯은 **LLM 이 쓰는 유일한 자리**다. 그 밖은 결정론 템플릿이고, 게이트가
+#      `template_modified` 로 불변을 지킨다. 서술에도 숫자는 못 쓴다(`bare_number`).
+#   4) `render: matrix` 의 행은 **프리즘이 고르지 않는다.** 카탈로그가 묶어 놓은 행(group)을
+#      골격이 그대로 편다. 행이 사람 손을 타면 9300 행에 9400 의 이득이 들어가도 게이트가
+#      못 잡는다 — 역할은 맞고 행만 틀리기 때문이다.
+#   5) `required: true` 인 절이 비면 절은 **조용히 사라지고**, 그 공백은 마지막
+#      `render: gaps` 절에 **한 줄로 모인다.** 절마다 "내용 없음"을 찍으면 문서가
+#      부재 표기로 도배된다 — 읽는 사람이 무엇을 하면 되는지는 **한곳에 모여 있어야** 보인다.
+#      I-5(빈 값은 빈 채 + 담당)는 폐기가 아니라 **자리를 옮긴 것**이다.
+#   6) `absent.kind` 가 공백의 종류를 가른다 — 이것이 이 문서의 핵심 장치다.
+#        선언  사람이 알면 **말해서 채운다**. LLM 이 받아 `absent.slot` 에 적는다.
+#        반입  파일이 들어와야 한다(성적서 · 측정 보고서 · 사진). 말로는 못 채운다.
+#        도구  도구가 아직 못 읽는다(ODA 변환기 · CST export 규약).
+#      ★ 값이 문서로 바로 들어가지 않는다. **선언 자리(manifest·registry)로 들어가고**
+#        파이프라인이 다시 돌아 참조로 실린다 — 참조 바인딩(D-22)이 뚫리지 않는다.
+#
+# 골조의 출처
+#   실제 안테나 보고서(Marine Radar X 대역 · 1·2차 설계)의 목차를 따랐다. 그 보고서가
+#   최소 내용이었으므로 다음을 더했다 — 요약, 요구 명세, 요구·시뮬·시험 3열 대조,
+#   방사 패턴, 업데이트 필요 대장.
+#
+# 개정 2026-08-03-2 (Q-02) · 확정: 사람
+
+spec_version: "draft-2026-08-03-2"
+title: "안테나 통합 문서"
+
+# 문서 제목 줄에 들어갈 역할 (한 개)
+title_role: "식별.원천명"
+
+# ── 서술 규율 — 프리즘 프롬프트에 그대로 실린다 ─────────────────────────────
+prose_rules:
+  - "숫자를 쓰지 않는다. 값이 필요하면 그 값은 이미 위 표에 있다 — 표를 가리키는 말로 쓴다."
+  - "표에 있는 것을 되풀이하지 않는다. 표가 말하지 못하는 것(왜·무엇을 뜻하는지·무엇이 빈지)을 쓴다."
+  - "확인되지 않은 것을 단정하지 않는다. 근거가 없으면 '확인되지 않았다'고 쓴다."
+  - "마커 밖을 고치지 않는다. 표·제목·주석·대장은 결정론 산출이고 게이트가 대조한다."
+  - "시뮬레이션값과 측정값을 같은 말로 부르지 않는다. 어느 레인의 값인지는 절 제목이 정해 두었다."
+  - "사람이 알려준 값을 문서에 직접 적지 않는다. 마지막 대장의 '적을 자리'에 넣고 다시 돌린다."
+
+sections:
+
+  # ══ 1. 요약 — 문서를 열자마자 읽는 것 ═════════════════════════════════════
+  #   용도 · 대역 · 성능 목표 · 규모. 그리고 **형상 preview**.
+  #   ★ reuse: 요약은 정의상 아래 내용의 재진술이다. 여기 실은 값도 상세 절에 다시 실린다.
+  - id: 요약
+    title: "1. 요약"
+    render: list
+    required: true
+    reuse: true
+    absent:
+      why: "제품 배정과 형상 판독이 둘 다 없다 — 요약할 것이 없다"
+      owner: "파이프라인 운영"
+      kind: 선언
+      slot: "제품 이름과 용도 — 원천 어디에도 없는 값이다"
+      fields:
+        - {path: "products:{제품}.label", label: "제품 이름", type: str, role: product_label}
+        - {path: "products:{제품}.use",   label: "용도 — 무엇에 쓰는 안테나인가", type: str, role: product_use}
+    roles:
+      - product_label
+      - product_use
+      - f0_target_ghz
+      - band_lo_ghz
+      - band_hi_ghz
+      - n_elements_transform
+      - n_elements_solid
+      - n_elements
+      - geometry_max_edge_mm
+      - scale_max_edge_mm
+      - array_pitch_mm
+      - gain_max_dbi
+      - aperture_hpbw_deg
+      - 식별.판정
+    # 형상 preview — 알아보는 그림(3D)이 먼저, 재는 그림(2D 전체도)이 뒤.
+    figures:
+      - figure_3d_iso
+      - figure_2d_overview
+    prose:
+      - slot: 한줄_요약
+        guide: >
+          이 안테나가 **무엇에 쓰이는 물건인지** 한두 문장. 어느 대역에서 어떤 일을 하는지,
+          형상이 어떤 모양인지(선형 배열인지 평면 배열인지). 성능이 요구를 만족하는지는
+          여기서 말하지 않는다 — 대조 절이 한다.
+        max_sentences: 4
+      - slot: 지금_상태
+        guide: >
+          이 문서가 지금 어디까지 와 있는지. 무엇이 확인되었고 무엇이 아직인지를
+          **한 문장으로** 정리하고, 자세한 목록은 마지막 대장을 가리킨다.
+        max_sentences: 3
+
+  # ══ 2. 시제품 · 도면 — 실물과 도면. 초기 화면에 보여야 한다 ════════════════
+  - id: 시제품
+    title: "2. 시제품 · 도면"
+    render: figures
+    required: true
+    absent:
+      why: "시제품 사진도 읽을 수 있는 도면도 없다"
+      owner: "시제품 담당 · 플랫폼"
+      kind: 반입
+      slot: "사진 → 원천 폴더 · 도면 → ODA 변환기 반입(EXT-1)"
+    figures:
+      - figure_photo_bare
+      - figure_photo_assembly
+      - figure_2d_detail
+      - figure_3d_top
+      - figure_dwg_preview
+    prose:
+      - slot: 실물_소견
+        guide: >
+          사진의 물건이 도면·형상과 같은 것으로 보이는지. 조립체 사진에 반사판이 있으면
+          그것이 도면의 반사판과 연결되는지. **같다고 단정하지 않는다** — 보이는 것과
+          보이지 않는 것을 나눠 적는다.
+        max_sentences: 3
+      - slot: 도면_소견
+        guide: >
+          상세 시트가 여러 장이면 무엇을 나눠 그린 것인지. 읽을 수 없는 원본이 있어
+          프리뷰만 실린 것이 있으면 그 사실과, 무엇이 반입되어야 읽히는지를 적는다.
+        max_sentences: 3
+        skip_if_all_empty: true
+
+  # ══ 3. 대조의 기준. 이것이 없으면 뒤의 모든 판정이 근거를 잃는다 ═══════════
+  - id: 요구명세
+    title: "3. 요구 명세"
+    render: matrix
+    required: true
+    absent:
+      why: "제품이 지정되지 않았거나 지정된 제품에 요구가 등재되어 있지 않다"
+      owner: "제품 담당"
+      kind: 선언
+      slot: "제품 요구 — 대역 · 타겟 주파수 · 성능 요구 5종"
+      # 기계가 쓰는 자리. `tools/declare.py` 는 **여기 없는 경로에 쓰지 않는다.**
+      fields:
+        - {path: "products:{제품}.band_ghz",  label: "동작 대역 [하한, 상한]", type: pair_num, unit: GHz, role: band_lo_ghz}
+        - {path: "products:{제품}.f0_ghz",    label: "타겟 주파수",           type: num, unit: GHz, key: "요구.band.항목"}
+        - {path: "products:{제품}.requirements.gain_dbi.min",          label: "이득 하한",     type: num, unit: dBi, key: "요구.gain_dbi.하한"}
+        - {path: "products:{제품}.requirements.return_loss_db.max",    label: "반사 손실 상한", type: num, unit: dB, key: "요구.return_loss_db.상한"}
+        - {path: "products:{제품}.requirements.sidelobe_level_db.max", label: "부엽 상한",     type: num, unit: dB, key: "요구.sidelobe_level_db.상한"}
+        - {path: "products:{제품}.requirements.hbw_deg.max",           label: "수평 빔폭 상한", type: num, unit: deg, key: "요구.hbw_deg.상한"}
+        - {path: "products:{제품}.requirements.vbw_deg.min",           label: "수직 빔폭 하한", type: num, unit: deg, key: "요구.vbw_deg.하한"}
+    axis:
+      label: "요구 항목"
+      roles: [open_item]
+    columns:
+      - {role: req_min,   label: "하한(이상)"}
+      - {role: req_max,   label: "상한(이하)"}
+      - {role: req_axis,  label: "적용 축"}
+      - {role: req_basis, label: "근거"}
+    prose:
+      - slot: 요구의_출처
+        guide: >
+          이 요구가 어디서 온 것인지 — 사람이 선언한 것인지 문서에서 옮긴 것인지.
+          하한만 있거나 상한만 있는 항목이 있으면 그것이 무엇을 뜻하는지(한쪽만 걸린
+          요구인지, 나머지가 아직 안 정해진 것인지) 밝힌다. 후자면 정해야 할 사람을 적는다.
+        max_sentences: 4
+
+  # ══ 4. 형상 상세 ═══════════════════════════════════════════════════════════
+  - id: 형상
+    title: "4. 형상 · 배열 (상세)"
+    render: table
+    required: true
+    absent:
+      why: "형상을 읽을 수 있는 파일이 없다 — DWG 만 있고 변환기가 아직 없다"
+      owner: "플랫폼"
+      kind: 도구
+      slot: "ODA File Converter 반입(EXT-1) 후 재실행"
+    roles:
+      - n_elements
+      - array_pitch_over_lambda
+      - pitch_uniformity
+      - array_grouping
+      - scale_max_edge_mm
+      # 규모 교차 검사 — 솔버 선언과 임포트 형상이 어긋나는지 드러내는 자리
+      - transform_span_ratio
+      - monitor_subvolume_max_mm
+      - model_box_max_mm
+      - n_symmetry_planes
+      - symmetry_unpaired_count
+      - n_layers
+      - n_polyline
+      - n_circle
+      - bbox_x_mm
+      - bbox_y_mm
+      - elevation_mm
+    prose:
+      - slot: 배열_구성
+        guide: >
+          배열이 어떤 모양인지 — 선형인지 평면인지, 균일한지 테이퍼인지. 주기 산포가 크면
+          그것이 의도된 테이퍼인지 아닌지는 **단정하지 않는다**(판정은 사람).
+        max_sentences: 4
+      - slot: 이_형상이_뜻하는_것
+        guide: >
+          ★ **여기가 이 문서를 표 모음에서 보고서로 바꾸는 자리다.**
+          위 표의 값들이 서로 어떻게 얽히는지 설명한다 — 소자 수와 개구 폭이 빔폭에
+          어떻게 걸리는지, 앞면과 뒷면 도면이 무엇을 각각 담고 있는지, 층 높이가
+          기판 두께와 어떤 관계인지. **값을 옮겨 적지 말고 관계를 말한다.**
+          도면이 여럿이면 어느 것이 무엇을 그린 것인지 독자가 알 수 있게 한다.
+        max_sentences: 6
+      - slot: 대칭면_소견
+        guide: >
+          짝 없는 소자가 있으면 그것이 무엇을 뜻할 수 있는지. 선언된 대칭면과 실제 배치가
+          어긋나는 경우의 가능한 해석을 **가능성으로만** 적는다.
+        max_sentences: 3
+        skip_if_all_empty: true
+
+  # ══ 5. 재질 — 유전율은 기준 주파수와 함께여야 뜻이 있다(D-34) ══════════════
+  - id: 스택업
+    title: "5. 스택업 · 재질"
+    render: table
+    required: true
+    absent:
+      why: "기판 재질이 선언되어 있지 않다 — 품명 · 유전율 · 두께 · 표면 처리"
+      owner: "안테나 설계"
+      kind: 선언
+      slot: "기판 품명 · 유전율 · 유전율 기준 주파수 · 두께 · 표면 처리"
+      fields:
+        - {path: "products:{제품}.substrate.name",        label: "기판 품명(제조사 표기)", type: str, role: material_name}
+        - {path: "products:{제품}.substrate.er",          label: "유전율",               type: num, unit: "εr", role: material_er}
+        - {path: "products:{제품}.substrate.er_ref_ghz",  label: "유전율 측정 기준 주파수", type: num, unit: GHz, role: material_er_ref_ghz}
+        - {path: "products:{제품}.substrate.h_mm",        label: "기판 두께",             type: num, unit: mm, role: substrate_h_mm}
+        - {path: "products:{제품}.stackup.layer_count",   label: "도체 층 수",            type: num, unit: "개", role: material_layer_count}
+        - {path: "products:{제품}.stackup.copper_oz",     label: "외층 동박",             type: num, unit: oz, role: copper_weight_oz}
+        - {path: "products:{제품}.stackup.surface_finish", label: "표면 처리",            type: str, role: surface_finish}
+        - {path: "products:{제품}.reflector.material",    label: "반사판 재질",           type: str, role: reflector_material}
+        - {path: "products:{제품}.reflector.thickness_mm", label: "반사판 두께",          type: num, unit: mm, role: reflector_thickness_mm}
+        - {path: "products:{제품}.reflector.finish",      label: "반사판 표면 처리",       type: str, role: reflector_finish}
+    roles:
+      - material_name
+      - material_er
+      - material_er_ref_ghz
+      - t_sub_mm
+      - t_cond_mm
+      - substrate_h_declared_mm
+      - substrate_h_mm
+      - material_layer_count
+      - copper_weight_oz
+      - surface_finish
+      - reflector_material
+      - reflector_thickness_mm
+      - reflector_finish
+    # 스택업은 표로 읽으면 **층의 순서와 상대 두께**가 안 보인다. 모식도가 먼저 말한다.
+    figures:
+      - figure_stackup
+    prose:
+      - slot: 스택업_소견
+        guide: >
+          선언된 두께와 임포트 형상에서 얻은 두께가 어긋나면 그 사실을 적는다.
+          재질이 여럿이면 어느 것이 기판이고 어느 것이 도체인지 구분한다.
+        max_sentences: 3
+      - slot: 재질이_뜻하는_것
+        guide: >
+          ★ **재질 값을 나열하지 말고 그것이 안테나에 무엇을 하는지 설명한다.**
+          유전율이 높거나 낮은 것이 파장과 소자 크기에 어떤 방향으로 작용하는지,
+          기판이 두껍거나 얇은 것이 대역폭과 손실에 어떤 방향으로 작용하는지 —
+          **방향만** 말한다(수치 예측은 하지 않는다). 표면 처리가 왜 그 공정인지
+          기록에 근거가 있으면 적고, 없으면 없다고 적는다.
+        max_sentences: 6
+      - slot: 유전율_기준
+        guide: >
+          유전율에 기준 주파수가 함께 있는지. 없거나 타겟 대역과 멀면 **그 값으로 판정하지
+          않는다는 사실**을 적는다 — 우리가 다시 계산해 두 번째 정본을 만들지 않는다.
+          설계자가 이미 재계산해 반영했다면 그 기록이 어디 있어야 하는지 적는다.
+        max_sentences: 4
+      - slot: 반사판_소견
+        guide: >
+          반사판이 안테나 기판과 어떻게 다른 물건인지(재질 · 표면 처리 · 도면 출처).
+          표면 처리가 아직 없으면 그것이 시제품 단계라서인지 미정이라서인지는
+          **단정하지 않는다** — 기록에 있는 대로만 적는다.
+        max_sentences: 3
+        skip_if_all_empty: true
+
+  # ══ 6. 공급사 출하 성적 — 판정은 공급사가 한 것을 옮긴다 ═══════════════════
+  - id: 출하성적
+    title: "6. 공급사 출하 성적 · 표면 처리"
+    render: matrix
+    required: true
+    absent:
+      why: "제조사 출하 성적 자료가 없다 — 도금 두께 · 전기시험 · 최종 판정"
+      owner: "구매 · 품질"
+      kind: 반입
+      slot: "PCB 제조사 출하 성적서(원천 폴더) — 성적서는 제조사가 발행한 문서다"
+    axis:
+      label: "성적 항목"
+      roles: [open_item]
+    columns:
+      - {role: qc_spec_min,       label: "규격(min)"}
+      - {role: qc_measured_mean,  label: "실측 평균"}
+      - {role: qc_measured_range, label: "실측 범위"}
+      - {role: qc_standard,       label: "적용 규격"}
+      - {role: qc_verdict,        label: "판정"}
+    roles:
+      - qc_lot_verdict
+    prose:
+      - slot: 성적_소견
+        guide: >
+          어느 항목이 규격에 견주어 여유가 있는지는 **적지 않는다** — 그것은 수치를 다시
+          말하는 것이다. 대신 이 성적이 무엇을 보증하고 무엇을 보증하지 않는지(도금 두께는
+          보증하나 전기 성능은 아니라는 식) 밝힌다. 판정은 공급사가 한 것이고 우리가 다시
+          한 것이 아님을 분명히 한다.
+        max_sentences: 4
+
+  # ══ 7. 급전 ════════════════════════════════════════════════════════════════
+  - id: 급전
+    title: "7. 급전 · 포트"
+    render: table
+    roles:
+      - n_ports
+      - port_width_mm
+      - port_height_mm
+      - port_impedance_ohm
+    prose:
+      - slot: 급전_소견
+        guide: "포트 수가 소자 수와 어떤 관계인지. 급전 구조가 짐작되면 가능성으로 적는다."
+        max_sentences: 3
+        skip_if_all_empty: true
+
+  # ══ 8. 계산 근거 — 시뮬도 시험도 아닌 제3의 레인 ═══════════════════════════
+  #   여기 값은 **형상만으로** 나온 것이고 여자·소자 패턴을 모른다 — 그래서 성능이 아니라 근거다.
+  - id: 계산근거
+    title: "8. 계산 근거 — 개구 · 배열인자"
+    lane: "계산(형상 기반)"
+    render: table
+    roles:
+      - wavelength_mm
+      - aperture_hpbw_deg
+      - gain_max_dbi
+      - af_hpbw_deg
+      - af_sll_db
+      - af_sll_angle_deg
+      - af_grating_deg
+    # 배열인자 곡선 — 값 표만으로는 부엽이 어디에 서는지 보이지 않는다.
+    figures:
+      - figure_array_factor
+    prose:
+      - slot: 무엇을_말해주나
+        guide: >
+          **값을 되풀이하지 말고 그 값이 무엇을 뜻하는지 쓴다.** 개구 빔폭과 배열인자
+          빔폭이 서로 비슷한지 다른지, 다르다면 무엇 때문일 수 있는지. 격자로브 각이
+          나왔다면 배열 주기가 파장에 견주어 어떤 상태라는 뜻인지 — 주기가 파장에
+          가까울수록 격자로브가 시야 안으로 들어온다는 관계를 **말로** 설명한다.
+          숫자는 위 표에 있으므로 다시 쓰지 않는다.
+        max_sentences: 5
+      - slot: 요구와의_거리
+        guide: >
+          이 계산값들이 요구 명세 절의 목표와 **같은 방향인지 반대인지**. 계산이 요구를
+          이미 넘어서 보이더라도 "만족한다"고 쓰지 않는다 — 이것은 상한과 근사이지
+          달성값이 아니다. 무엇이 있어야 진짜 판정이 되는지(시뮬 또는 측정) 연결한다.
+        max_sentences: 4
+      - slot: 계산의_한계
+        guide: >
+          이 절의 값이 어떤 가정 위에 있는지(균일 여자 · 소자 패턴 미포함 · 개구 능률 100 %).
+          그래서 이 값을 시뮬레이션 결과나 측정값과 **같은 것으로 읽으면 안 되는** 이유를
+          한 문장으로 못 박는다. 배열인자를 빔패턴이라고 부르지 않는다.
+        max_sentences: 4
+
+  # ══ 9. 시뮬레이션 결과 — 주파수 × 성능 ═════════════════════════════════════
+  - id: 시뮬결과
+    title: "9. 시뮬레이션 결과"
+    lane: "시뮬레이션(CST)"
+    render: matrix
+    required: true
+    absent:
+      why: "원거리장 결과가 없다 — 주파수별 이득 · 반사 손실 · 부엽 · 빔폭"
+      owner: "안테나 설계"
+      kind: 도구
+      slot: "CST ASCII export 규약 정착(EXT-2) — 규약 없이 이진 파일을 뜯지 않는다(T-1)"
+    axis:
+      label: "주파수"
+      roles: [freq_point_mhz, freq_point_ghz]
+    columns:
+      - {role: perf_gain_dbi,       label: "이득"}
+      - {role: perf_return_loss_db, label: "반사 손실"}
+      - {role: perf_sll_db,         label: "부엽 레벨"}
+      - {role: perf_hbw_deg,        label: "수평 빔폭"}
+      - {role: perf_vbw_deg,        label: "수직 빔폭"}
+    roles:
+      - performance_data_present
+      - farfield_freq_min_ghz
+      - farfield_freq_max_ghz
+    prose:
+      - slot: 시뮬_조건
+        guide: >
+          어느 항목이 요구를 만족하는지는 대조 절이 한다. 여기서는 시뮬레이션 조건이
+          무엇이었는지(어느 판본의 형상인지, 어떤 재질값을 썼는지)와, 그 조건이 문서 앞 절의
+          선언과 일치하는지를 쓴다.
+        max_sentences: 4
+
+  # ══ 10. 시험 결과 — 실측. 시뮬과 같은 열, 다른 레인 ════════════════════════
+  - id: 시험결과
+    title: "10. 시험 결과"
+    lane: "시험(측정)"
+    render: matrix
+    required: true
+    absent:
+      why: "측정 성적이 없다 — 측정 기관 · 일자 · 주파수별 실측"
+      owner: "시험 담당"
+      kind: 반입
+      slot: "측정 성적서(원천 폴더) + manifest 측정란(기관 · 일자 · 대상 판본)"
+    axis:
+      label: "주파수"
+      roles: [freq_point_mhz, freq_point_ghz]
+    columns:
+      - {role: perf_gain_dbi,       label: "이득"}
+      - {role: perf_return_loss_db, label: "반사 손실"}
+      - {role: perf_sll_db,         label: "부엽 레벨"}
+      - {role: perf_hbw_deg,        label: "수평 빔폭"}
+      - {role: perf_vbw_deg,        label: "수직 빔폭"}
+    figures:
+      - figure_photo_test
+    prose:
+      - slot: 시험_조건
+        guide: >
+          어디서 언제 누가 측정했는지, 어느 판본의 시제품이었는지. 측정 대역이 시뮬레이션
+          대역과 다르면 그 사실을 적는다 — 다른 것을 비교하고 있을 수 있다.
+        max_sentences: 4
+
+  # ══ 11. 보고서의 척추 — 요구 · 시뮬 · 시험을 한 줄에 세운다 ════════════════
+  - id: 요구대조
+    title: "11. 요구 대조"
+    render: matrix
+    required: true
+    absent:
+      why: >
+        대조할 레인이 둘 이상 서지 않는다 — 요구 · 시뮬레이션 · 시험 중 하나만 있으면
+        대조가 아니라 나열이다
+      owner: "앞 절의 담당 — 요구 · 시뮬 · 시험 중 빠진 레인"
+      kind: 도구
+      slot: "위 세 절 중 둘이 차면 자동으로 선다 — 여기 직접 적을 자리는 없다"
+    axis:
+      label: "항목"
+      roles: [open_item]
+    columns:
+      - {role: cmp_required, label: "요구"}
+      - {role: cmp_sim,      label: "시뮬레이션"}
+      - {role: cmp_test,     label: "시험"}
+      - {role: cmp_verdict,  label: "판정"}
+    prose:
+      - slot: 대조_소견
+        guide: >
+          시뮬과 시험이 어긋나는 항목이 있으면 그 어긋남이 무엇에서 올 수 있는지를
+          **가능성으로** 적는다(재질값 · 조립 공차 · 측정 조건). 어느 하나로 단정하지 않는다.
+          판정하지 않은 항목이 있으면 왜 판정하지 않았는지 — 값이 없어서인지 임계가
+          없어서인지 — 를 구분해 적는다. 이 둘은 다른 문제이고 담당이 다르다.
+        max_sentences: 5
+
+  # ══ 12. 방사 패턴 — 성능의 시각 근거. 빔폭은 3D 가 읽기 쉽다 ═══════════════
+  - id: 방사패턴
+    title: "12. 방사 패턴"
+    render: figures
+    required: true
+    absent:
+      why: >
+        패턴 데이터가 없다(I-L). 배열인자는 계산 근거 절에 있으나 소자 패턴이 없어
+        **빔패턴이라고 부를 수 없다**
+      owner: "안테나 설계"
+      kind: 도구
+      slot: "CST 원거리장 export(EXT-2) — 이름을 바꿔 없는 것을 있는 것처럼 만들지 않는다"
+    figures:
+      - figure_pattern_3d
+      - figure_pattern_polar
+    prose:
+      - slot: 패턴_소견
+        guide: >
+          그림에서 눈으로 확인되는 것만 — 주엽이 어디를 향하는지, 부엽이 눈에 띄는지.
+          각도나 레벨을 읽지 않는다. 그 값들은 성능 절의 표가 정본이다.
+        max_sentences: 3
+        skip_if_all_empty: true
+
+  # ══ 13. 특이 표기 ══════════════════════════════════════════════════════════
+  - id: 특이표기
+    title: "13. 특이 표기"
+    render: table
+    roles:
+      - 추출.특이표기수
+    prose:
+      - slot: 표기_소견
+        guide: >
+          심볼 · 위치만 기록되고 의미는 미확정이다(I-6). 의미를 **추정하지 않는다** —
+          누가 확정해야 하는지만 적는다.
+        max_sentences: 2
+
+  # ══ 14. 실행 메타 ══════════════════════════════════════════════════════════
+  - id: 실행메타
+    title: "14. 실행 메타"
+    render: table
+    roles:
+      - 식별.원천명
+      - 식별.원천종류
+      - 식별.주도레인
+      - 식별.기여레인
+      - 식별.파일수
+      - 식별.판독불가수
+      - run.run_id
+      - run.rule_version
+      - run.registry_version
+      - run.product
+      - 추출.geom_hash
+      - verify.n_checks
+      - verify.verdict
+    prose: []                          # 메타에는 서술을 붙이지 않는다
+
+  # ══ 15. 부록 — 참고 계산. 본문에 두면 읽는 흐름을 끊는다 ═══════════════════
+  #   공진 정합은 **타겟 주파수와 직접 이어지지 않는다.** 패치 길이 하나에서 역산한
+  #   반파장 공진이고, 자유공간 기준은 기판 위 패치에 그대로 적용되지도 않는다.
+  #   그런데 값이 GHz 단위라 본문에 있으면 **동작 주파수처럼 읽힌다** — 그것이 위험이다.
+  #   지우지는 않는다: 도면 판독이 물리적으로 말이 되는지 보는 **자릿수 점검**으로는 쓸모가
+  #   있고, 지우면 왜 안 쓰는지도 사라진다. 뒤로 옮기고 무엇인지 적어 둔다(08-03-4 사용자).
+  - id: 부록계산
+    title: "15. 부록 — 참고 계산"
+    lane: "계산(형상 기반) · 참고"
+    render: table
+    note: >
+      아래는 **동작 주파수가 아니다.** 패치 길이에서 역산한 반파장 공진이고,
+      급전 구조 · 기판 가장자리 효과 · 소자 간 결합을 하나도 넣지 않았다.
+      자릿수가 말이 되는지 보는 용도이지 설계값이 아니다.
+    roles:
+      - param_resonance_ghz
+      - resonance_substrate_min_ghz
+      - resonance_substrate_max_ghz
+      - resonance_free_min_ghz
+      - resonance_free_max_ghz
+    prose:
+      - slot: 참고값_읽는_법
+        guide: >
+          이 값을 **어떻게 읽으면 안 되는지**부터 쓴다 — 동작 주파수가 아니고 요구 대조에
+          쓰지 않는다. 그 다음, 자릿수가 선언 대역과 같은 자리인지 정도만 짚는다.
+          기판 기준과 자유공간 기준이 갈리는 이유(유전율이 파장을 줄인다)를 한 문장으로
+          설명하되, 어느 쪽이 옳다고 정하지 않는다.
+        max_sentences: 4
+        skip_if_all_empty: true
+
+  # ══ 16. 업데이트 필요 — 빈 절이 여기 한 곳에 모인다 ════════════════════════
+  #   ★ 이 절은 **골격이 스스로 만든다.** 카탈로그에서 오지 않는다.
+  #     빈 절이 하나도 없으면 이 절도 사라진다 — 그때는 축하할 일이다.
+  - id: 업데이트필요
+    title: "16. 업데이트 필요"
+    render: gaps
+    note: >
+      아래 "선언"은 **아는 사람이 말하면 채워진다.** 값을 이 문서에 적지 않고
+      '적을 자리'에 넣은 뒤 다시 돌린다 — 그래야 값이 출처와 함께 실린다.
+      "반입"은 파일이 들어와야 하고, "도구"는 도구가 갖춰져야 한다.
+    columns:
+      - {role: gap_section, label: "절"}
+      - {role: gap_what,    label: "없는 것"}
+      - {role: gap_kind,    label: "종류"}
+      - {role: open_owner,  label: "담당"}
+      - {role: gap_slot,    label: "적을 자리 · 필요한 것"}
+    prose:
+      - slot: 다음_할_일
+        guide: >
+          위 목록에서 **가장 먼저 닫아야 하는 것**이 무엇이고 왜인지. 하나가 닫히면
+          문서의 무엇이 달라지는지 연결한다. **언제 닫히는지는 적지 않는다** — 우리가
+          아는 사실이 아니다. "선언"으로 표시된 것이 있으면 그것은 말만 하면 되는
+          것임을 밝힌다.
+        max_sentences: 5
+
+# ── 보류 — 자산 DB 제품군 연계가 열릴 때 절로 세운다 (08-03-2 사용자) ─────────
+#   판본 비교(`tools/revision.py` · rev_* 역할)는 **한 원천 안에서는 근거가 얇다.**
+#   같은 제품군의 다른 안테나와 나란히 세울 수 있어야 "무엇 대비 판올림인가"가 생긴다.
+#   도구와 자산 DB(`links.relation` · `antennas.variant_of`)는 이미 있다 —
+#   문서 절로 세우는 것만 미룬다.
+deferred_sections:
+  - id: 판본비교
+    why: "자산 DB 에서 같은 제품군 안테나로 연계될 때 진행"
+    roles: [rev_verdict, rev_scale_ratio, rev_freq_shift_mhz, rev_dk_signature_ppm,
+            rev_claim, rev_claim_match]
+
+# ── HTML 대시보드 배치 (tools/package.py · 테스트베드가 읽는다) ───────────────
+html:
+  title: "안테나 통합 문서"
+  # 상단 요약 타일 — 한눈에 보는 값
+  tiles:
+    - {role: product_use,          label: "용도"}
+    - {role: band_lo_ghz,          label: "대역 하한"}
+    - {role: band_hi_ghz,          label: "대역 상한"}
+    - {role: n_elements_transform, label: "소자 수"}
+    - {role: geometry_max_edge_mm, label: "최대 변"}
+    - {role: material_er,          label: "유전율"}
+  # 패널 — 테스트베드가 탭/아코디언으로 그린다
+  panels:
+    - {id: document,  label: "문서",        source: "doc_md"}
+    - {id: evidence,  label: "값의 산지",    source: "refs_used"}
+    - {id: gate,      label: "게이트 판정",  source: "gate"}
+    - {id: exempt,    label: "예외 적용",    source: "exempt_hits"}
+    - {id: unjudged,  label: "임계 미지정",  source: "check_unjudged"}
+    - {id: visuals,   label: "도면 · 렌더",  source: "render_artifacts"}
+    - {id: gaps,      label: "업데이트 필요", source: "gaps"}
+  # 배지 — 사람 검수가 반드시 보아야 하는 표시
+  badges:
+    - {id: role_undeclared, label: "역할 미선언", severity: warn,
+       why: "키 오배치가 대조로 걸러지지 않은 자리 — 눈으로 확인한다(I-B)"}
+    - {id: exempt_applied,  label: "맨 숫자 예외", severity: warn,
+       why: "코드 인용 안의 숫자는 검사하지 않았다(I-C)"}
+    - {id: unmapped_role,   label: "역할 미등재", severity: warn,
+       why: "어휘에 없는 값 — 문서에 실리지 못했다(I-A)"}
+    - {id: unjudged,        label: "임계 미지정", severity: info,
+       why: "판정하지 않은 항목 — 통과와 다르다(I-5)"}
+    - {id: gap_declarable,  label: "말하면 채워짐", severity: info,
+       why: "사람이 아는 값이면 선언 자리에 넣기만 하면 된다 — 기다릴 일이 아니다"}

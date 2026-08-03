@@ -1,0 +1,30 @@
+# requirements.txt — 안테나 오케스트레이터 Level 1
+#
+# ★ 결론 먼저: **Spark 에서는 설치할 것이 없다.**
+#   여기 적힌 것이 전부 `5_SRS_AI_Studio/setup/requirements.txt` 의 부분집합이다.
+#   studio 가 이미 langgraph·langgraph-checkpoint-sqlite·PyYAML 을 깔아 둔다.
+#   이 파일은 **오케스트레이터만 따로 돌리는 환경**(다른 기기·격리 시험)을 위한 것이다.
+#
+# 버전 하한은 studio 쪽과 **같은 값**을 쓴다. 다르면 폐쇄망에서 두 조합이 생긴다.
+#
+# 설치 확인:  python tools/check_env.py --state
+
+# ── 1~3·5단계: 추가 설치 없음 ────────────────────────────────────────────────
+#   route · extract · verify_api · render · ledger · roles · catalog · docspec ·
+#   gate · assets · package 는 표준 라이브러리만 쓴다.
+#   프리즘(vLLM 호출)도 stdlib urllib 다 — openai 패키지를 쓰지 않는다.
+#   PyYAML 만 예외이고, 그것도 studio 가 이미 깐다.
+PyYAML>=6.0                          # registry/*.yaml (products · document_spec)
+
+# ── 4단계: 상태 머신 ─────────────────────────────────────────────────────────
+#   없으면 agent/runtime.py(stdlib 대역)로 돈다 — 대역 통과는 LangGraph 검증이 아니다(I-G).
+langgraph>=0.2.60                    # setup/requirements.txt 와 동일 하한
+langgraph-checkpoint-sqlite>=2.0     # 〃 (앞선 초안의 >=1.0 은 틀렸다 — studio 는 2.0 하한)
+
+# ── 설치하지 않는 것 ─────────────────────────────────────────────────────────
+#   vllm      — Spark 가 docker 로 서빙한다(setup/00_common.sh VLLM_IMAGE). HTTP 로 부른다.
+#   openai    — /chat/completions 를 stdlib urllib 로 친다. 의존을 늘리지 않는다.
+#   pydantic  — 상태를 TypedDict(total=False)로 둔다. orch_state_contract 그대로다.
+#
+# 최소 파이썬 3.10 (studio 와 같은 하한). 3.11/3.12 권장 —
+# **3.14 는 피한다**: langgraph 계열 휠이 아직 없어 install 스크립트가 여기서 멈춘다.

@@ -1,0 +1,24 @@
+{
+  "name": "srs-antenna",
+  "owner": {
+    "name": "SRS AI Studio"
+  },
+  "metadata": {
+    "description": "Antenna source folders (CST / DXF / Gerber) to a gated engineering document.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "antenna-orchestrator",
+      "source": "./",
+      "description": "Deterministic antenna document pipeline over MCP. The server never calls an LLM; the host model writes only between PROSE markers, so numbers cannot be invented.",
+      "version": "0.1.0",
+      "author": {
+        "name": "SRS AI Studio"
+      },
+      "keywords": ["antenna", "cst", "dxf", "gerber", "rf", "document", "mcp"],
+      "category": "engineering",
+      "strict": false
+    }
+  ]
+}
