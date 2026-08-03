@@ -17,6 +17,9 @@ __pycache__/
 venv/
 .pytest_cache/
 
+# bootstrap 개발 모드 venv (CLAUDE_PLUGIN_DATA 가 없을 때만 생김)
+.plugin-data/
+
 # 편집기·OS
 .DS_Store
 .idea/

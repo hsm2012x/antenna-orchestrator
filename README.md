@@ -17,6 +17,13 @@
 
 설치 뒤 Claude Code 를 다시 띄우고 `orch_status` 를 부르면 붙었는지 알 수 있다.
 
+**의존성은 스스로 갖춘다.** 서버는 `bootstrap.py` 를 거쳐 뜬다 — 첫 기동에서
+`${CLAUDE_PLUGIN_DATA}/venv` 를 만들고 `mcp`·`PyYAML` 을 **동기로** 깐 뒤 서버를 붙인다.
+그림용 `matplotlib` 은 **백그라운드**로 깐다(지연 로드라 기동을 막지 않는다). 수동 `pip` 설치는
+필요 없다. 첫 기동은 설치 때문에 몇십 초 걸릴 수 있고 — 이번 한 번뿐이다. `MCP` 가 잠시
+`connecting` 으로 보이면 잠깐 기다리거나 `/reload-plugins` 를 한다. `requirements-runtime.txt` 가
+바뀌면 다음 세션이 알아서 다시 깐다.
+
 ## 설치 후 반드시 할 것 — 데이터 자리 지정
 
 ★ `ORCH_DATA_DIR` 를 **플러그인 밖** 작업 폴더로 지정한다.
@@ -33,7 +40,9 @@ export ORCH_DATA_DIR=$HOME/antenna             # Linux · macOS
 
 ## 필요한 것
 
-- Python 3.11 이상 · `pip install mcp pyyaml matplotlib`
+- `python` 이 PATH 에 있고 3.11 이상 — 나머지(`mcp`·`PyYAML`·`matplotlib`)는 `bootstrap.py` 가
+  전용 venv 에 자동으로 깐다(위 참조). 격리 시험 등으로 직접 깔려면
+  `pip install -r mcp_server/requirements-runtime.txt` 를 쓴다.
 - 원천 파일은 **서버가 도는 기계**에 있어야 한다
 
 ## 핵심 — 서버는 LLM 을 부르지 않는다

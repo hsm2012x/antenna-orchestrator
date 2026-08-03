@@ -1,0 +1,6 @@
+# mcp_server/requirements-figures.txt — 그림 렌더 전용 (백그라운드 설치)
+#
+# matplotlib 은 figures.py · render.py 안에서 **지연 로드**된다 — 서버 기동에는 필요 없고
+# run_pipeline 의 그림 단계에서만 쓴다. 그래서 bootstrap.py 가 이걸 **백그라운드**로 깐다:
+# 서버는 mcp·PyYAML 만 갖추면 즉시 붙고, matplotlib 는 뒤에서 준비된다. 첫 그림 전에 끝난다.
+matplotlib>=3.7
