@@ -7,7 +7,15 @@
   · **렌더 실패는 파이프라인을 멈추지 않는다** — "렌더 실패 + 사유"로 남기고 다음으로 간다(3.4).
   · 수치를 만들지 않는다. 빔패턴은 원거리장 데이터가 없으면 그리지 않는다(N-3).
 
-출력: work/<run_id>/render/ (layout_2d.svg · view_3d.html · cad_index.json) + 렌더_결과.json
+출력: work/<run_id>/render/ + 렌더_결과.json
+  cad_index.json    **항상** — 원천 인벤토리. 판독 못 한 파일도 사유와 함께 여기 남는다
+  array_factor.png  해석이 배열인자를 계산했을 때만
+  layout_2d.svg     원천에 **DXF 도면이 있을 때만**
+  view_3d.html      원천에 3D 형상(DXF 3D · STEP)이 **있을 때만**
+
+★ 조건부 산출을 무조건인 것처럼 적으면 안 된다(결함 F-40). 도면 없는 CST 프로젝트에서는
+  cad_index.json 하나만 남는 것이 **정상**이고, 그 사실은 figures.py 의 `skipped[]` 가 말한다.
+
 사용: python tools/render.py --run-id <id>
 """
 from __future__ import annotations

@@ -29,6 +29,7 @@ _HERE = Path(__file__).resolve().parent
 
 async def _run() -> int:
     from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import get_default_environment
     from mcp.client.stdio import stdio_client
 
     ok = fail = 0
@@ -40,8 +41,18 @@ async def _run() -> int:
         else:
             fail += 1; print(f"  FAIL  {n}  {d}")
 
+    # ★ 결함 F-41 — env 를 넘기지 않으면 SDK 가 **최소 환경**만 물려준다(PATH·HOME 정도).
+    #   그러면 자식 서버는 ORCH_DATA_DIR 을 못 보고 데이터가 없는 것처럼 군다.
+    #   시험이 조용히 다른 환경을 재는 것은 시험을 하지 않은 것과 같다(B-3).
+    import os
+    _pass = {k: v for k, v in os.environ.items() if k.startswith("ORCH_")}
     params = StdioServerParameters(
-        command=sys.executable, args=[str(_HERE / "server.py"), "--transport", "stdio"])
+        command=sys.executable, args=[str(_HERE / "server.py"), "--transport", "stdio"],
+        env={**get_default_environment(), **_pass})
+    if _pass:
+        print("  환경 전달: " + " · ".join(f"{k}={v}" for k, v in sorted(_pass.items())))
+    else:
+        print("  환경 전달: ORCH_* 없음 — 서버가 기본 자리를 쓴다")
 
     async with stdio_client(params) as (r, w):
         async with ClientSession(r, w) as s:

@@ -16,9 +16,16 @@
     캡션에는 축척 · 단위 산지 · **치수 정본 여부**가 들어간다. 이것을 프리즘이 쓰게 두면
     "3D 그림 밑에 치수를 적는" 사고가 난다. 캡션은 `g` 시길이 **결정론으로** 만든다.
 
+★ 실패와 없음을 가른다 (결함 F-37)
+    `failed[]`   그리려다 깨진 것 — 도구의 문제다.
+    `skipped[]`  **그릴 입력이 아예 없던 것** — 도구의 문제가 아니다.
+    이 둘을 한 통에 담으면 `n_failed: 0` 이 "다 잘됐다"로 읽힌다. 실제로는 그림이
+    한 장도 없는데 실패도 0인 상태가 나오고, 보는 사람은 도구가 고장 났다고 여긴다.
+    조용한 것이 결함이다 — **왜 안 그렸는지**는 값과 똑같이 남겨야 한다(I-5 · B-3).
+
 산출
     work/<run_id>/figures/*.png · *.svg      렌더 산출
-    work/<run_id>/그림_결과.json              항목 목록 + 실패 사유
+    work/<run_id>/그림_결과.json              항목 목록 + 실패 사유 + **미시도 사유**
 
 CLI
     python tools/figures.py build <run_id>
@@ -66,6 +73,47 @@ KINDS = {
 
 _TOP = re.compile(r"(?:^|[_\-])top(?:$|[_\-])", re.I)
 _BOT = re.compile(r"(?:^|[_\-])(?:bot|bottom)(?:$|[_\-])", re.I)
+
+
+# ── 형상이 들어 있으나 우리가 못 읽는 포맷 ──────────────────────────────────
+#
+# ★ 왜 이 표가 필요한가 (결함 F-38)
+#   인덱서는 이것들을 "판독 불가 바이너리"로만 적는다. 그러면 원천에 형상이
+#   **있는데** 못 읽은 것과, 애초에 형상이 **없는** 것이 같은 말로 보인다.
+#   둘은 할 일이 정반대다 — 앞은 변환·리더가 필요하고 뒤는 도면을 그려야 한다.
+#
+# ★ 파서를 만들지 않는다(T-1). 여기 적는 것은 "무엇이 있으면 읽을 수 있게 되는가"뿐이다.
+GEOMETRY_UNREADABLE = {
+    ".sab": ("ACIS 바이너리", "SAB/STEP 리더 반입(OpenCASCADE 등)", "도구"),
+    ".sat": ("ACIS 텍스트", "SAB/STEP 리더 반입(OpenCASCADE 등)", "도구"),
+    ".cby": ("CST 독점 형상", "CST 에서 DXF 또는 STEP 으로 export(EXT-2)", "반입"),
+    ".stp": ("STEP", "STEP 리더 반입(OpenCASCADE 등)", "도구"),
+    ".step": ("STEP", "STEP 리더 반입(OpenCASCADE 등)", "도구"),
+    ".igs": ("IGES", "IGES 리더 반입", "도구"),
+    ".iges": ("IGES", "IGES 리더 반입", "도구"),
+    ".dwg": ("DWG(본문 압축)", "ODA 변환기 반입(EXT-1)", "도구"),
+}
+
+# 그림 종류 → 그것이 없을 때 대신 채워지는 문서 절의 역할.
+# 대장이 "어느 절이 비었나"를 말할 때 쓴다.
+SKIP_ROLE = {
+    "cad": ("figure_2d_overview", "2D/3D 도면 그림"),
+    "stackup": ("figure_stackup", "스택업 단면 그림"),
+    "array_factor": ("figure_array_factor", "배열인자 곡선"),
+}
+
+
+def geometry_inventory(files: list[dict]) -> dict:
+    """원천에 **형상이 들어 있는데 우리가 못 읽는** 파일이 무엇이었나.
+
+    개수와 확장자만 센다. 안을 열어 보지 않는다 — 여는 순간 파서를 만드는 것이다(T-1).
+    """
+    seen: dict[str, int] = {}
+    for f in files:
+        ext = Path(str(f.get("rel") or f.get("path") or "")).suffix.lower()
+        if ext in GEOMETRY_UNREADABLE:
+            seen[ext] = seen.get(ext, 0) + 1
+    return seen
 
 
 # ── 원천에서 렌더 대상 고르기 ───────────────────────────────────────────────
@@ -158,6 +206,7 @@ def draw_stackup(run_id: str, work: Path, out_dir: Path) -> Path | None:
     ref = req.get("reflector") or {}
     if not (sub.get("name") or sub.get("er") or sub.get("h_mm")):
         return None                     # 선언이 없으면 그리지 않는다(빈 그림을 만들지 않는다)
+        # ★ 조용히 None 을 내면 "도구가 안 됐다"로 읽힌다. 사유는 stackup_reason() 이 낸다.
 
     import matplotlib
     matplotlib.use("Agg")
@@ -213,8 +262,64 @@ def draw_stackup(run_id: str, work: Path, out_dir: Path) -> Path | None:
     return out
 
 
+def stackup_reason(work: Path) -> str | None:
+    """스택업을 **왜 못 그렸나.** 그릴 수 있으면 None.
+
+    draw_stackup 이 조용히 None 을 내면 읽는 사람은 도구가 고장 났다고 여긴다.
+    그릴 값이 없다는 것과 그리려다 깨졌다는 것은 완전히 다른 일이다.
+    """
+    ver = C.read_json(work / "해석_결과.json") if (work / "해석_결과.json").exists() else {}
+    sub = ((ver.get("requirements") or {}).get("substrate") or {})
+    if sub.get("name") or sub.get("er") or sub.get("h_mm"):
+        return None
+    return ("기판 선언이 없다 — 재질명 · 유전율 · 두께 가운데 하나도 없어 층을 배치할 수 없다. "
+            "아는 사람이 말하면 채워진다(declare_set 으로 substrate.name · er · h_mm)")
+
+
+def _skip(kind: str, why: str, gap_kind: str, owner: str, slot: str) -> dict:
+    role, label = SKIP_ROLE[kind]
+    return {"kind": kind, "role": role, "label": label,
+            "why": " ".join(why.split()), "종류": gap_kind, "담당": owner, "자리": slot}
+
+
+def _skipped(work: Path, tg: dict, files: list[dict], has_af: bool,
+             stack_why: str | None) -> list[dict]:
+    """**시도조차 못 한 것**의 목록. 실패가 아니다 — 입력이 없었던 것이다(F-37).
+
+    빈 목록이 나오는 것이 정상이다. 목록이 비지 않았는데 문서가 조용하면 그게 결함이다.
+    """
+    out = []
+    if not tg["dxf_pairs"] and not tg["dwg"]:
+        inv = geometry_inventory(files)
+        if inv:
+            # 형상은 있다 — 우리가 못 읽을 뿐이다. 구제 경로를 확장자별로 그대로 옮긴다.
+            what = " · ".join(f"{ext}({n}건, {GEOMETRY_UNREADABLE[ext][0]})"
+                              for ext, n in sorted(inv.items(), key=lambda x: -x[1]))
+            paths = sorted({GEOMETRY_UNREADABLE[e][1] for e in inv})
+            gk = "반입" if any(GEOMETRY_UNREADABLE[e][2] == "반입" for e in inv) else "도구"
+            why = (f"그릴 CAD 도면(DXF/DWG)이 원천에 없다. 형상은 있으나 판독 불가 포맷이다 — "
+                   f"{what}. 구제: {' 또는 '.join(paths)}")
+        else:
+            gk = "반입"
+            why = ("그릴 CAD 도면(DXF/DWG)이 원천에 없고, 판독 불가 형상 파일도 없다 — "
+                   "원천에 형상 자체가 들어오지 않았다. 도면을 반입해야 한다")
+        out.append(_skip("cad", why, gk, "설계", "원천 폴더 — DXF/DWG 또는 STEP export"))
+    if stack_why:
+        out.append(_skip("stackup", stack_why, "선언", "설계",
+                         "registry/declared/<제품>.yaml — substrate.name · er · h_mm"))
+    if not has_af:
+        out.append(_skip("array_factor",
+                         "해석이 배열인자를 내지 않았다 — 소자 배열(주기 · 개수)을 추출하지 "
+                         "못했거나 파장을 정할 대역이 없다. 대역 또는 배열 추출이 먼저다",
+                         "도구", "해석", "products.yaml band_ghz · 추출 배열"))
+    return out
+
+
 def build(run_id: str, work: Path | None = None) -> dict:
-    """원천을 렌더하고 그림 항목을 만든다. **실패는 실패로 남긴다**(T-4)."""
+    """원천을 렌더하고 그림 항목을 만든다. **실패는 실패로 남긴다**(T-4).
+
+    ★ 그리고 **없음은 없음으로 남긴다**(F-37) — `skipped[]`.
+    """
     import render_page as RP
     import dwgmeta as DM
 
@@ -278,22 +383,28 @@ def build(run_id: str, work: Path | None = None) -> dict:
     # 값 그림(배열인자·스택업)은 도면이 아니다. 도면이 없어도 값이 있으면 그린다 —
     # 그래야 "형상은 못 읽었지만 재질은 안다"가 문서에 **그림으로** 남는다.
     af = wd_render(work) / "array_factor.png"
-    if af.exists():
+    has_af = af.exists()
+    if has_af:
         entries.append(_entry("array_factor", "그림.배열인자", af, out_dir,
                               "tools/render.py — 해석이 계산한 곡선을 그리기만 한다",
                               "가로축 각도 · 세로축 상대 레벨"))
+    stack_why = stackup_reason(work)
     try:
-        sp = draw_stackup(run_id, work, out_dir)
+        sp = draw_stackup(run_id, work, out_dir) if not stack_why else None
         if sp:
             entries.append(_entry("stackup", "그림.스택업", sp, out_dir,
                                   "tools/figures.py draw_stackup — 선언된 층 구성",
                                   "모식도 — 두께 비율 과장"))
     except Exception as e:
+        stack_why = None               # 깨진 것은 `failed` 다 — `skipped` 로 세지 않는다
         failed.append({"target": "스택업", "stage": "stackup",
                        "why": f"{type(e).__name__}: {e}"[:200]})
 
+    skipped = _skipped(work, tg, files, has_af, stack_why)
     res = {"run_id": run_id, "n_figures": len(entries), "n_failed": len(failed),
-           "entries": entries, "failed": failed, "targets": tg,
+           "n_skipped": len(skipped),
+           "entries": entries, "failed": failed, "skipped": skipped, "targets": tg,
+           "형상_판독불가": geometry_inventory(files),
            "규율": ("그림은 카탈로그 항목이다 — 문서는 `{{g:키}}` 로 참조하고 경로를 직접 "
                   "쓰지 않는다. 캡션은 결정론으로 만든다(치수 정본 여부를 LLM 이 쓰게 "
                   "두지 않는다)."),
@@ -306,7 +417,7 @@ def of_run(run_id: str, work: Path | None = None) -> dict:
     work = Path(work) if work else C.work_dir(run_id, create=False)
     p = work / RESULT_NAME
     return C.read_json(p) if p.exists() else {"run_id": run_id, "n_figures": 0,
-                                              "entries": [], "failed": []}
+                                              "entries": [], "failed": [], "skipped": []}
 
 
 # ── 자기 시험 ────────────────────────────────────────────────────────────────
@@ -333,9 +444,54 @@ def self_test() -> int:
         all(p["bottom"] is None for p in tg2["dxf_pairs"]) and len(tg2["dxf_pairs"]) == 2,
         str(tg2["dxf_pairs"]))
 
+    # ── 결함 F-37 회귀 — **없음이 조용하면 안 된다**
+    #   실물이 없어도 도는 시험이다. 이 결함은 정확히 "입력이 없는 run"에서만 나므로
+    #   실물 있는 시험만 두면 영원히 못 잡는다.
+    import tempfile
+    tmp = Path(tempfile.mkdtemp(prefix="figskip-"))
+    cst = [{"rel": "Model.sab", "path": "/x/Model.sab"},
+           {"rel": "Model/3D/a.cby", "path": "/x/a.cby"},
+           {"rel": "Model/3D/b.cby", "path": "/x/b.cby"},
+           {"rel": "readme.txt", "path": "/x/readme.txt"}]
+    inv = geometry_inventory(cst)
+    chk("판독 불가 형상을 확장자별로 센다", inv == {".sab": 1, ".cby": 2}, str(inv))
+    chk("일반 파일은 형상으로 세지 않는다", ".txt" not in inv, str(inv))
+
+    sk = _skipped(tmp, {"dxf_pairs": [], "dwg": []}, cst, has_af=False,
+                  stack_why=stackup_reason(tmp))
+    kinds_s = {s["kind"] for s in sk}
+    chk("도면 0개면 **사유가 남는다**", "cad" in kinds_s, str(kinds_s))
+    cad = next(s for s in sk if s["kind"] == "cad")
+    chk("사유가 '무엇이 있었는지'를 말한다",
+        ".sab" in cad["why"] and ".cby" in cad["why"], cad["why"])
+    chk("사유가 **구제 경로**를 말한다",
+        "export" in cad["why"] or "반입" in cad["why"], cad["why"])
+    chk("공백 종류가 셋 중 하나다", cad["종류"] in ("선언", "반입", "도구"), cad["종류"])
+    chk("담당과 적을 자리가 있다", bool(cad["담당"] and cad["자리"]))
+    chk("스택업도 사유가 남는다", "stackup" in kinds_s, str(kinds_s))
+    stk = next(s for s in sk if s["kind"] == "stackup")
+    chk("스택업 공백은 **선언**이다 — 말하면 채워진다", stk["종류"] == "선언", stk["종류"])
+    chk("배열인자도 사유가 남는다", "array_factor" in kinds_s, str(kinds_s))
+
+    # 형상 파일조차 없으면 말이 달라져야 한다 — "못 읽었다"와 "안 들어왔다"는 다른 일이다
+    sk0 = _skipped(tmp, {"dxf_pairs": [], "dwg": []},
+                   [{"rel": "a.txt", "path": "/x/a.txt"}], has_af=True, stack_why=None)
+    c0 = next(s for s in sk0 if s["kind"] == "cad")
+    chk("형상 자체가 없으면 그렇게 말한다", "형상 자체가 들어오지 않았다" in c0["why"], c0["why"])
+    chk("그릴 수 있는 것에는 사유를 달지 않는다",
+        {s["kind"] for s in sk0} == {"cad"}, str([s["kind"] for s in sk0]))
+
+    # 그릴 대상이 있으면 cad 사유는 서지 않는다 — 사유가 도배되면 안 읽힌다
+    sk1 = _skipped(tmp, {"dxf_pairs": [{"top": "/x/a.dxf", "bottom": None}], "dwg": []},
+                   cst, has_af=True, stack_why=None)
+    chk("대상이 있으면 사유를 만들지 않는다", sk1 == [], str(sk1))
+
+    chk("스택업 사유가 무엇을 말하면 되는지 알려준다",
+        "declare_set" in (stackup_reason(tmp) or ""), str(stackup_reason(tmp)))
+
     base = C.data_dir() / "handoff" / "04_experiment_data" / "Antenna_CAD_ECO"
     if not base.exists():
-        print("  건너뜀 — 실물 없음"); return 2
+        print("  건너뜀 — 실물 없음"); return 0 if fail == 0 else 1
 
     # W-1 — 쓰기는 work/ 아래에서만 한다
     work = C.work_dir("fig-selftest", create=True)

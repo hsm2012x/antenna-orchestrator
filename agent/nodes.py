@@ -224,7 +224,12 @@ def n_render(s: dict) -> dict:
         try:
             import figures as FIGURES
             fr = FIGURES.build(s["run_id"])
-            fig = {"n_figures": fr["n_figures"], "n_failed": fr["n_failed"]}
+            # ★ n_skipped 를 함께 남긴다 — 그림 0장 · 실패 0건이 "다 잘됐다"로 읽히던
+            #   결함(F-37) 이 여기서 시작했다. 원장에 사유가 없으면 아무도 못 본다(B-3).
+            fig = {"n_figures": fr["n_figures"], "n_failed": fr["n_failed"],
+                   "n_skipped": fr.get("n_skipped", 0),
+                   "skipped": [{"kind": x["kind"], "종류": x["종류"], "why": x["why"][:160]}
+                               for x in (fr.get("skipped") or [])]}
         except Exception as fe:        # 그림 실패가 파이프라인을 멈추지 않는다(F-27)
             fig = {"n_figures": 0, "n_failed": -1,
                    "why": f"{type(fe).__name__}: {fe}"[:200]}

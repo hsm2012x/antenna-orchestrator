@@ -223,6 +223,12 @@ def run_report(run_id: str) -> dict:
         "figures": [{"key": f.get("key"), "role": f.get("role"),
                      "path": (f.get("figure") or {}).get("path")}
                     for f in (figs.get("entries") or [])],
+        # ★ 그림이 **왜 없나**. 이 칸이 없어서 "그림 1장 · 실패 0건"이 정상으로 읽혔다(F-37).
+        #   실패(도구가 깨짐)와 미시도(입력이 없음)를 여기서부터 갈라 놓는다.
+        "figures_skipped": [{"kind": x.get("kind"), "종류": x.get("종류"),
+                             "담당": x.get("담당"), "why": x.get("why")}
+                            for x in (figs.get("skipped") or [])],
+        "형상_판독불가": figs.get("형상_판독불가") or {},
         "n_catalog_entries": cat.get("n_entries", 0),
         "unmapped_keys": (cat.get("unmapped_keys") or [])[:20],
         "artifacts": sorted(p.name for p in work.iterdir() if p.is_file()),

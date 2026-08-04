@@ -434,6 +434,11 @@ def build(run_id: str, work: Path | None = None) -> dict:
     figs = _load(work / "그림_결과.json")
     for fe in (figs.get("entries") or []):
         put(dict(fe, role_unmapped=fe.get("role") not in R.ROLES))
+    # 그리지 **못한** 사유도 카탈로그가 나른다(F-37). 골격이 대장을 세울 때 이걸 읽는다.
+    # ★ 카탈로그에 실어야 하는 이유 — 게이트가 골격을 **다시 만들어** 대조하기 때문이다.
+    #   사유를 골격 인자로 넘기면 게이트 쪽 골격에는 없어서 template_modified 가 난다.
+    #   같은 파일에서 읽으면 양쪽이 반드시 같아진다.
+    figure_gaps = figs.get("skipped") or []
 
     if verify:
         # 아래 둘은 물리량이 아니라 실행 메타다 — 역할을 명시해 어휘 미매핑과 구분한다.
@@ -458,6 +463,7 @@ def build(run_id: str, work: Path | None = None) -> dict:
         "ref_syntax": {f"{{{{{k}:<키>}}}}": v for k, v in REF_SIGILS.items()},
         "규율": "카탈로그는 값을 만들지 않는다 — 식별·추출·해석 JSON의 값을 평탄화해 키를 붙일 뿐이다(N-1).",
         "n_entries": len(entries),
+        "figure_gaps": figure_gaps,       # 그림을 왜 못 그렸나 — 대장이 읽는다
         "entries": entries,
     }
     return cat
@@ -541,6 +547,35 @@ def _gap_block(sec: dict, gaps: list[dict]) -> list[str]:
     return out + [""]
 
 
+def _figure_gap_rows(cat: dict, spec: dict) -> list[dict]:
+    """그림을 **왜 못 그렸나**를 대장의 행으로 편다 (결함 F-37).
+
+    왜 절이 비었는지와 따로 세는가
+        형상 절은 추출값이 있어 차 있는데 그림만 없을 수 있다. 그때 절은 공백이 아니고,
+        대장은 조용하고, 문서는 "그림이 원래 없는 문서"처럼 보인다. 그림이 없다는 것은
+        절이 비었는지와 **무관한 사실**이라 따로 세야 한다.
+
+    산지는 카탈로그다 — 게이트가 골격을 다시 만들 때 같은 파일을 읽으므로 양쪽이 같아진다.
+    """
+    gaps = cat.get("figure_gaps") or []
+    if not gaps:
+        return []
+    where = {}                        # 역할 → 그 그림이 붙기로 되어 있던 절
+    for s in spec["sections"]:
+        for role in s.get("figures") or []:
+            where.setdefault(role, s["title"])
+    rows = []
+    for g in gaps:
+        rows.append({
+            "section": f"{where.get(g.get('role'), '그림')} — {g.get('label') or '그림'}",
+            "why": g.get("why") or "",
+            "kind": g.get("종류") or "도구",
+            "owner": g.get("담당") or "",
+            "slot": g.get("자리") or "",
+        })
+    return rows
+
+
 def _matrix_rows(sec: dict, cat: dict, used: set) -> tuple[list[str], set]:
     """행렬 절의 행을 **결정론으로** 편다.
 
@@ -616,9 +651,10 @@ def skeleton(cat: dict, spec: dict | None = None) -> str:
 
         # 대장은 카탈로그에서 오지 않는다 — 앞 절들이 남긴 공백이 행이 된다.
         if sec["render"] == "gaps":
-            if not gaps:
+            rows_all = gaps + _figure_gap_rows(cat, spec)
+            if not rows_all:
                 continue               # 빈 절이 없으면 대장도 없다 — 축하할 일이다
-            out += _gap_block(sec, gaps)
+            out += _gap_block(sec, rows_all)
             for pr in sec.get("prose") or []:
                 slot = f"{sec['id']}.{pr['slot']}"
                 guide = " ".join((pr.get("guide") or "").split())
@@ -844,6 +880,30 @@ def self_test() -> int:
     chk("그림 앞은 빈 줄로 뗀다 — 표가 그림 줄을 삼키지 않는다", "\n\n{{g:" in sk2)
     chk("그림이 있으면 그 절은 대장에 오르지 않는다",
         "시제품 · 도면" not in _block(sk2, gapsec["id"]))
+
+    # ── 결함 F-37 회귀 — 그림을 못 그린 사유가 **대장에 선다**
+    #   절은 값으로 차 있는데 그림만 없는 경우가 이 결함의 본체다. 절이 비지 않으므로
+    #   기존 대장 규칙으로는 한 줄도 서지 않고, 문서는 그림이 원래 없는 것처럼 보인다.
+    fg = dict(_mk(figs))
+    fg["figure_gaps"] = [{
+        "kind": "cad", "role": "figure_2d_overview", "label": "2D/3D 도면 그림",
+        "why": "그릴 CAD 도면(DXF/DWG)이 원천에 없다 — .sab(1건) · .cby(2건). "
+               "구제: CST 에서 DXF 또는 STEP 으로 export",
+        "종류": "반입", "담당": "설계", "자리": "원천 폴더"}]
+    sk3 = skeleton(fg, spec)
+    _g3 = _block(sk3, gapsec["id"])
+    chk("그림 공백이 대장에 선다", ".cby" in _g3, _g3[:200])
+    chk("그림 공백이 붙기로 되어 있던 **절 이름**과 함께 선다",
+        "2D/3D 도면 그림" in _g3 and "—" in _g3, _g3[:200])
+    chk("그림 공백도 종류·담당·자리를 싣는다",
+        "반입" in _g3 and "설계" in _g3 and "원천 폴더" in _g3, _g3[:200])
+    chk("그림 공백은 절이 차 있어도 선다",
+        "figure_2d_detail" in sk3 and ".cby" in _g3)
+    # 사유가 없으면 대장을 억지로 세우지 않는다 — 빈 대장은 소음이다
+    chk("사유가 없으면 그림 공백 행도 없다", ".cby" not in _block(sk2, gapsec["id"]))
+    # 게이트가 골격을 다시 만들 때 같은 카탈로그를 읽으므로 결과가 같아야 한다
+    chk("같은 카탈로그면 골격이 같다 — 게이트가 template_modified 로 오판하지 않는다",
+        skeleton(fg, spec) == sk3)
 
     print(f"\n결과: {ok}/{ok + fail} PASS")
     return 0 if fail == 0 else 1
