@@ -144,6 +144,20 @@ def main(argv=None) -> int:
               file=sys.stderr)
         return 2
 
+    # ★ matplotlib 을 **이벤트 루프 시작 전에** 미리 올린다. 렌더 노드(tools/render.py)가
+    #   그림을 그릴 때 `import matplotlib` 을 지연 실행하는데, 그 import 가 FastMCP 의
+    #   **이벤트 루프 스레드 안에서 처음** 일어나면 교착된다 — FastMCP 는 동기 도구를 루프에서
+    #   직접 돌리고, matplotlib/numpy 의 무거운 C-확장 import 가 그 안에서 데드락한다(Windows).
+    #   여기서 미리 올려 두면 렌더 때의 import 는 no-op 이 되어 멈추지 않는다.
+    #   (아직 안 깔렸으면 조용히 넘어간다 — bootstrap 이 백그라운드로 준비 중일 수 있다.)
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot  # noqa: F401
+    except Exception as _e:
+        print(f"[{SERVER_NAME}] matplotlib 예열 생략({type(_e).__name__}) — "
+              f"첫 그림에서 준비되면 그때 올린다", file=sys.stderr)
+
     if a.transport == "stdio":
         mcp.run(transport="stdio")
     else:

@@ -1,6 +1,6 @@
 {
   "name": "antenna-orchestrator",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Antenna source folders (CST / DXF / Gerber) to a gated engineering document. The MCP server is fully deterministic; the host model writes prose only.",
   "author": {
     "name": "SRS AI Studio"

@@ -113,13 +113,23 @@ def _install_figures_bg(vpy: Path, data_dir: Path) -> None:
     if marker.exists() and marker.read_bytes() == want:
         return
     _log("그림 의존성(matplotlib)을 백그라운드로 준비한다 — 서버 기동을 막지 않는다.")
-    # pip 성공 시에만 표식을 매니페스트 내용으로 쓴다. 실패하면 다음 세션이 다시 시도한다.
+    # pip 성공 뒤 **폰트 캐시를 미리 데운다.** matplotlib 첫 렌더는 시스템 폰트를 훑어
+    # 캐시(~/.matplotlib)를 만드는데, Windows 에선 이게 매우 느리고 여러 프로세스가 동시에
+    # 만들려 하면 교착된다 — 그 비용을 run_pipeline 안(MCP 호출)에서 치르면 멈춘 것처럼 보인다.
+    # 여기서 미리 한 번 그려 캐시를 만들어 두면 첫 그림이 즉시 나온다.
+    # pip·캐시 warm 이 성공했을 때만 표식을 남긴다. 실패하면 다음 세션이 다시 시도한다.
     child = (
         "import subprocess,sys,pathlib\n"
         "r=subprocess.run([sys.executable,'-m','pip','install',"
         "'--disable-pip-version-check','-q','-r'," + repr(str(_REQ_FIG)) + "])\n"
-        "if r.returncode==0: pathlib.Path(" + repr(str(marker)) + ").write_bytes("
-        + repr(want) + ")\n"
+        "if r.returncode==0:\n"
+        "    try:\n"
+        "        import matplotlib; matplotlib.use('Agg')\n"
+        "        import matplotlib.pyplot as plt\n"
+        "        plt.figure(); plt.plot([0,1],[0,1]); plt.close('all')\n"  # 폰트 캐시 빌드 유발
+        "    except Exception:\n"
+        "        pass\n"
+        "    pathlib.Path(" + repr(str(marker)) + ").write_bytes(" + repr(want) + ")\n"
     )
     # 부모(이 부트스트랩) 수명과 무관하게 살아남도록 자식을 분리한다 —
     # 짧은 세션이라도 설치가 끊기지 않게. 실패하면 표식이 없어 다음 세션이 다시 시도한다.

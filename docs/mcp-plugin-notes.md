@@ -17,6 +17,7 @@
 | 6 | 데이터가 갱신 때 사라짐 / `ok:false` | `ORCH_DATA_DIR` 미지정 → data_root 가 **휘발성 플러그인 폴더** | `setx ORCH_DATA_DIR <작업폴더>` 후 **완전 재시작** |
 | 7 | 검은 콘솔 창이 뜸 | 백그라운드 설치를 `DETACHED_PROCESS` 로 띄움 → 자체 콘솔 창 | **`CREATE_NO_WINDOW`** 로 창 없이 실행 |
 | 8 | (잠재) JSON-RPC 깨짐 | stdio 서버에서 **stdout 에 로그/pip 출력**이 섞임 | stdout 은 **오직 JSON-RPC**. 모든 로그·pip 출력은 **stderr** |
+| 9 | `run_pipeline` 이 **응답 없이 30분** (직접 실행은 2.5초) | 렌더 노드의 **지연 `import matplotlib` 이 FastMCP 이벤트 루프 스레드 안에서** 처음 일어나 **교착**. FastMCP 는 동기 도구를 루프에서 직접 돌리고, 무거운 C-확장 import 가 그 안에서 데드락(Windows) | **서버 기동 시(루프 시작 전) matplotlib 을 미리 import** — 렌더 때 import 는 no-op |
 
 ---
 
@@ -142,6 +143,7 @@ flowchart TD
 ## 5. 다음에 이 repo 를 건드릴 때 지킬 불변식
 
 - [ ] **stdout 청정**: stdio 서버 경로에서 stdout 에 절대 로그를 쓰지 않는다. 로그·pip → stderr.
+- [ ] **무거운 C-확장 import 는 기동 때 예열**: `matplotlib`·`numpy` 같은 것을 **도구 안에서 지연 import 하지 않는다** — FastMCP 는 동기 도구를 이벤트 루프 스레드에서 직접 돌리므로, 루프 안 첫 import 가 교착된다. `server.py` 에서 `mcp.run()` **전에** 미리 올린다.
 - [ ] **`mcp<2` 유지**: FastMCP API(`mcp.server.fastmcp`)를 쓰는 한. 올리려면 `server.py` 를 2.x API 로 함께 고친다.
 - [ ] **의존성은 bootstrap venv 로만**: 시스템 python 을 가정하지 않는다. 기동 임계는 `requirements-runtime.txt`(동기), 그림은 `requirements-figures.txt`(백그라운드).
 - [ ] **Windows 백그라운드는 `CREATE_NO_WINDOW`**: `DETACHED_PROCESS` 는 검은 창을 띄운다.
@@ -167,3 +169,9 @@ pip install -r mcp_server/requirements-runtime.txt
 # 붙었는지 확인 (새 세션에서)
 #   "orch_status 불러줘"  → data_root·ledger·ok 를 본다
 ```
+
+**"직접은 되는데 MCP 로만 멈춘다" 를 잡는 법.** 도구를 in-process 로 부르면 되는데 MCP 경유만
+멈추면, 원인은 대개 **이벤트 루프 안에서만 나타나는 것**(무거운 import·자기 이벤트 루프·stdout 블록)이다.
+진짜 stdio 클라이언트(`mcp.client.stdio`)로 server.py 를 띄워 그 도구를 부르고, 서버 프로세스에
+`faulthandler.dump_traceback_later(25, repeat=True, file=...)` 를 걸어 **멈춘 지점의 스택**을 파일로 뜬다.
+루프 스레드에서 실제로 어느 줄이 블록되는지 그대로 보인다 — 추측 대신 스택으로 잡는다.
