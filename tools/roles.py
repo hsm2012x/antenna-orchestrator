@@ -128,6 +128,13 @@ EXTRA_ROLES: dict[str, str] = {
     "elevation_mm":    "도면 elevation(층 높이)",
     # 시각 근거(figures.py) — 그림도 카탈로그 항목이므로 역할이 있어야 한다.
     # 역할이 종류를 가르고, 종류가 **치수 정본 여부**를 정한다(캡션의 근거).
+    # ★ 형상 대표는 **렌더러가 여럿**이다(D-59). 같은 DXF 를 세 도구가 각각 그린다 —
+    #   render_page 300dpi 래스터 · cad_render 벡터 SVG · cad_render 오프라인 3D 뷰.
+    #   무엇이 나은지는 도구가 정할 수 없다(A-1). 셋을 다 그려 사람에게 보이고, 고른 것이
+    #   이 자리에 온다. 고르기 전에는 기본값(래스터)이 선다 — 문서가 막히지 않게.
+    "figure_shape_rep":   "형상 대표 그림 — 렌더러 선택(래스터 · 벡터 · 3D 뷰)",
+    "figure_cad_vector":  "2D 벡터 레이아웃 — 확대 무손실(cad_render)",
+    "figure_view3d":      "오프라인 3D 뷰 — 스냅샷 + 돌려 보기 링크(폐쇄망, CDN 없음)",
     "figure_2d_overview": "2D 전체도 — 치수 정본",
     "figure_2d_detail":   "2D 상세도 — 치수 정본",
     "figure_3d_iso":      "3D 사시 preview — 치수 정본 아님",

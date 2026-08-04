@@ -245,7 +245,32 @@ def _stage_images(work: Path, out: Path, doc_md: str) -> tuple[str, list[str]]:
         copied.append(rel)
         return f"![{alt}]({rel})"
 
-    return re.sub(r"!\[([^\]]*)\]\(([^)]+)\)", sub, doc_md), sorted(set(copied))
+    doc_md = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)", sub, doc_md)
+
+    # ★ 그림만이 산출이 아니다 (D-59) — 3D 뷰는 HTML 이라 마크다운이 그리지 못하고
+    #   `[돌려 보기](render/view_3d.html)` 처럼 **링크**로 붙는다. 링크를 안 옮기면
+    #   문서만 남에게 갔을 때 그 링크가 죽는다. 그림과 같은 이유로 같이 옮긴다.
+    LINKABLE = (".html", ".svg", ".png", ".pdf")
+
+    def sub_link(m):
+        txt, path = m.group(1), m.group(2)
+        if path.startswith(("http://", "https://", "#", f"{RESULT_DIR}/")):
+            return m.group(0)
+        if not path.lower().endswith(LINKABLE):
+            return m.group(0)
+        src = work / unquote(path)
+        if not src.is_file():
+            return m.group(0)
+        rdir.mkdir(parents=True, exist_ok=True)
+        dst = rdir / src.name.replace(" ", "_")
+        shutil.copy2(src, dst)
+        rel = f"{RESULT_DIR}/{dst.name}"
+        copied.append(rel)
+        return f"[{txt}]({rel})"
+
+    #   `!` 가 앞에 붙은 것은 위에서 이미 처리했다 — 다시 잡지 않게 뒤돌아본다
+    doc_md = re.sub(r"(?<!!)\[([^\]]*)\]\(([^)]+)\)", sub_link, doc_md)
+    return doc_md, sorted(set(copied))
 
 
 def build(run_id: str, work: Path | None = None) -> dict:
@@ -303,6 +328,26 @@ def self_test(run_id: str = "demo-test2") -> int:
         chk("미통과본 포장 거부", False, "통과해 버렸다")
     except Exception:
         chk("미통과본 포장 거부", True)
+    # ── D-59 회귀 — render/ 산출과 **3D 뷰 링크**도 산출 폴더로 간다
+    #   그림만 옮기면 3D 뷰는 링크가 죽는다 — 문서만 남에게 갔을 때 아무것도 안 열린다.
+    import tempfile as _tf
+    _o = Path(_tf.mkdtemp(prefix="pkg-link-"))
+    _w = Path(_tf.mkdtemp(prefix="pkg-work-"))
+    (_w / "render").mkdir()
+    for _n in ("layout_2d.svg", "view_3d.html", "array_factor.png"):
+        (_w / "render" / _n).write_text("x", encoding="utf-8")
+    _doc = ("![v](render/layout_2d.svg)\n\n[돌려 보기](render/view_3d.html)\n\n"
+            "![af](render/array_factor.png)\n\n[밖](https://e.com/a.html)\n")
+    _new, _imgs = _stage_images(_w, _o, _doc)
+    chk("render/ 그림이 result/ 로 간다", "result/layout_2d.svg" in _new, _new[:80])
+    chk("3D 뷰 **링크**도 result/ 로 간다", "[돌려 보기](result/view_3d.html)" in _new,
+        _new[:160])
+    chk("바깥 링크는 손대지 않는다", "https://e.com/a.html" in _new)
+    chk("옮긴 것을 전부 센다", len(_imgs) == 3, str(_imgs))
+    chk("실제 파일이 result/ 에 있다",
+        sorted(x.name for x in (_o / "result").iterdir())
+        == ["array_factor.png", "layout_2d.svg", "view_3d.html"])
+
     print(f"\n결과: {ok}/{ok + fail} PASS")
     return 0 if fail == 0 else 1
 

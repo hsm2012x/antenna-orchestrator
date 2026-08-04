@@ -616,7 +616,10 @@ def requirements_of(pname: str, pdef: dict) -> dict:
             # 사람이 선언해야만 들어오는 값들 — 원천 어디에도 없다(산지 e).
             # 해석은 이 값으로 **판정하지 않는다**. 문서에 싣기 위해 통과시킬 뿐이다.
             "stackup": pdef.get("stackup") or {},
-            "reflector": pdef.get("reflector") or {}}
+            "reflector": pdef.get("reflector") or {},
+            # 그림 취향 — 판정에 쓰지 않는다. 형상 대표를 어느 렌더러로 세울지의 선언이고
+            # (D-59), 여기 실려야 figures.py 가 읽는다. 바뀌면 낡음 판정에도 걸린다.
+            "figure_preference": pdef.get("figure_preference") or {}}
 
 
 def stale_requirements(run_id: str, registry_path=None) -> dict:

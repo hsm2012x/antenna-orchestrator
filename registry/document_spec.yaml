@@ -87,9 +87,11 @@ sections:
       - aperture_hpbw_deg
       - 식별.판정
     # 형상 preview — 알아보는 그림(3D)이 먼저, 재는 그림(2D 전체도)이 뒤.
+    # ★ 맨 앞은 **형상 대표**다. 같은 형상을 세 렌더러가 그리므로 무엇을 대표로 세울지는
+    #   사람이 고른다(A-1). 고르기 전에는 기본값이 서고 대장에 "선언" 한 줄이 뜬다.
     figures:
+      - figure_shape_rep
       - figure_3d_iso
-      - figure_2d_overview
     prose:
       - slot: 한줄_요약
         guide: >
@@ -116,7 +118,10 @@ sections:
     figures:
       - figure_photo_bare
       - figure_photo_assembly
+      - figure_2d_overview
       - figure_2d_detail
+      - figure_cad_vector
+      - figure_view3d
       - figure_3d_top
       - figure_dwg_preview
     prose:
@@ -611,3 +616,22 @@ html:
        why: "판정하지 않은 항목 — 통과와 다르다(I-5)"}
     - {id: gap_declarable,  label: "말하면 채워짐", severity: info,
        why: "사람이 아는 값이면 선언 자리에 넣기만 하면 된다 — 기다릴 일이 아니다"}
+
+# ══ 절의 공백이 아닌 선언 자리 (D-59) ══════════════════════════════════════
+#
+# ★ 왜 absent.fields 와 나누나
+#   absent.fields 는 "이 절이 비어서 물어야 하는 것"이다. 아래는 절이 비지 않았는데도
+#   물어야 하는 것 — **취향과 용도**의 문제다. 같은 형상을 세 렌더러가 그렸고, 어느
+#   것을 대표로 세울지는 데이터로 정해지지 않는다. 도구가 고르지 않는다(A-1).
+declarable_extra:
+  - path: "products:{제품}.figure_preference.shape"
+    label: "형상 대표 렌더러"
+    role: figure_shape_rep
+    type: enum
+    values: [raster, vector, view3d]
+    owner: "설계"
+    section: "1. 요약 — 형상 preview"
+    why: >
+      같은 도면을 세 도구가 각각 그린다. raster 는 축척이 캡션에 실리고 어디서나
+      열린다. vector 는 확대해도 안 깨진다. view3d 는 돌려 볼 수 있으나 치수 정본이
+      아니다. 고르기 전에는 raster 가 기본값으로 선다.

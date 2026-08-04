@@ -227,6 +227,20 @@ def validate(spec: dict) -> dict:
     tr = spec.get("title_role")
     if tr and not known_role(tr):
         bad.append(("(title)", tr))
+    # ── 절의 공백이 아닌 선언 자리 (D-59) ───────────────────────────────────
+    # 형상 대표 렌더러처럼 **어느 절이 비어서가 아니라 취향이라서** 물어야 하는 것이
+    # 있다. absent.fields 는 빈 절에만 달리므로 여기 따로 둔다. 자리를 정하는 것은
+    # 여전히 양식 정본이다 — 코드에 경로를 박지 않는다.
+    for i, f in enumerate(spec.get("declarable_extra") or []):
+        where = f"(declarable_extra[{i}])"
+        for k in ("path", "label", "role"):
+            if not f.get(k):
+                raise SpecError(f"{where}: {k} 가 없다 — 자리를 알 수 없는 선언은 받지 않는다")
+        if not known_role(f["role"]):
+            bad.append((where, f["role"]))
+        if f.get("type") == "enum" and not f.get("values"):
+            raise SpecError(f"{where}: type 이 enum 인데 values 가 없다 — "
+                            "고를 것이 없으면 고르라고 할 수 없다")
     if bad:
         raise SpecError(
             "역할 어휘에 없는 이름이 spec 에 있다 — 오타면 그 절이 조용히 빈다(I-A):\n  " +

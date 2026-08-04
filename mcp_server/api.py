@@ -535,6 +535,70 @@ def declare_set(path: str, value: str, product: str = "", by: str = "",
     return r
 
 
+@_guard
+def figure_variants(run_id: str) -> dict:
+    """같은 형상을 그린 **렌더러 후보 전부**. 고르는 것은 사람이다(A-1).
+
+    ★ 왜 도구가 안 고르나
+      래스터는 축척이 캡션에 실리고 어디서나 열린다. 벡터는 확대해도 안 깨진다.
+      3D 뷰는 돌려 볼 수 있으나 치수 정본이 아니다. 무엇이 나은지는 **무엇에 쓰느냐**에
+      달렸고, 그건 데이터에 없다. 셋을 다 그려 놓고 보여 준다.
+
+    ★ 당신이 할 일 — **사용자에게 세 장을 보여주고 고르게 한다.** 경로가 `path` 에 있다.
+      고르면 `figure_choose` 로 넣는다. 묻지 않고 고르면 A-1 위반이다.
+    """
+    import figures as FIG
+    work = C.work_dir(run_id, create=False)
+    if not work.exists():
+        return _err(f"run 이 없다: {run_id}", kind="no_run")
+    fr = FIG.of_run(run_id, work)
+    pool = fr.get("variants") or []
+    return {
+        "run_id": run_id,
+        "n_variants": len(pool),
+        "chosen": fr.get("variant_chosen"),
+        "chosen_source": fr.get("variant_source"),
+        "default": FIG.DEFAULT_VARIANT,
+        "variants": [{"variant": v["variant"], "label": v["label"],
+                      "renderer": v["renderer"], "특징": v["특징"],
+                      "path": str(work / v["fs_path"]),
+                      "doc_path": v.get("path"),
+                      "view_html": v.get("view_html")} for v in pool],
+        "다음": ("사용자에게 위 `path` 의 그림들을 **보여주고 고르게 한다.** "
+                "고르면 figure_choose(run_id, variant, by) 로 넣고 run_pipeline 을 다시 돌린다."
+                if len(pool) > 1 else
+                "후보가 하나뿐이다 — 고를 것이 없다. 물어볼 필요 없다."),
+    }
+
+
+@_guard
+def figure_choose(run_id: str, variant: str, by: str = "", why: str = "") -> dict:
+    """사용자가 고른 형상 대표 렌더러를 **선언 자리**에 넣는다.
+
+    제품 단위로 남는다 — 같은 제품의 다음 run 부터는 다시 묻지 않는다.
+    `by`(누가 골랐나)가 없으면 거부한다. **도구가 대신 고르지 않는다**(A-1).
+    """
+    import figures as FIG
+    if variant not in FIG.VARIANTS:
+        return _err(f"모르는 변형: {variant!r} — {'·'.join(FIG.VARIANTS)} 중 하나",
+                    kind="unknown_variant")
+    if not by.strip():
+        return _err("누가 골랐는지 없이 선언하지 않는다 — by 를 채운다(A-1)",
+                    kind="who_missing")
+    work = C.work_dir(run_id, create=False)
+    fr = FIG.of_run(run_id, work)
+    pool = {v["variant"] for v in (fr.get("variants") or [])}
+    if pool and variant not in pool:
+        return _err(f"이번 run 에 '{variant}' 후보가 없다 — 있는 것: {'·'.join(sorted(pool))}",
+                    kind="variant_absent")
+    prod = (C.read_json(work / "해석_결과.json") or {}).get("product") if work.exists() else None
+    if not prod:
+        return _err("제품이 지정되지 않은 run 이다 — 선호를 제품 단위로 남길 수 없다. "
+                    "run_pipeline 에 product 를 주고 다시 돌린다", kind="no_product")
+    return declare_set("products:{제품}.figure_preference.shape", variant,
+                       product=prod, by=by, why=why or "형상 대표 렌더러 선택")
+
+
 # ══ 리소스 ═════════════════════════════════════════════════════════════════
 
 def resource_guide() -> str:
@@ -603,6 +667,7 @@ TOOLS = (
     run_pipeline, compare_revisions, crosscheck, relate_entries,
     document_brief, submit_document, package_run,
     declare_gaps, declare_set,
+    figure_variants, figure_choose,
 )
 
 
@@ -725,6 +790,21 @@ def self_test() -> int:
     chk("사용법이 금지를 먼저 말한다", "절대 규칙" in resource_guide())
     chk("빠른 시작에 위반 대처표가 있다",
         "role_mismatch" in resource_quickstart() and "bare_number" in resource_quickstart())
+
+    # ── D-59 회귀 — 그림 선택은 **묻고** 한다
+    fv = figure_variants(rid) if rid else {}
+    if fv.get("ok") and fv.get("n_variants", 0) > 1:
+        chk("후보가 여럿이면 물어보라고 말한다", "고르게 한다" in fv["다음"], fv["다음"][:60])
+        chk("각 후보에 실제 파일 자리가 있다",
+            all(Path(v["path"]).exists() for v in fv["variants"]),
+            str([v["path"] for v in fv["variants"]])[:160])
+        chk("고르기 전에는 기본값임을 밝힌다", fv["chosen_source"] == "기본값", str(fv["chosen_source"]))
+    bad = figure_choose(rid or "x", "raster")
+    chk("누가 골랐는지 없으면 거부한다", bad["ok"] is False and bad.get("kind") == "who_missing",
+        str(bad)[:80])
+    bad2 = figure_choose(rid or "x", "없는변형", by="시험")
+    chk("모르는 변형을 거부한다", bad2["ok"] is False and bad2.get("kind") == "unknown_variant",
+        str(bad2)[:80])
 
     print(f"\n결과: {ok}/{ok + fail} PASS")
     return 0 if fail == 0 else 1

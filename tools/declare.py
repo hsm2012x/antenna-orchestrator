@@ -61,6 +61,10 @@ def declarable(spec: dict | None = None) -> list[dict]:
         for f in ab.get("fields") or []:
             out.append({"section": sec["title"], "section_id": sec["id"],
                         "owner": ab.get("owner"), **f})
+    # 절의 공백이 아닌 선언 자리 — 취향(형상 대표 렌더러 등). 자리는 양식 정본이 정한다.
+    for f in spec.get("declarable_extra") or []:
+        out.append({"section": f.get("section") or "문서 전체", "section_id": "_extra",
+                    "owner": f.get("owner") or "설계", **f})
     return out
 
 

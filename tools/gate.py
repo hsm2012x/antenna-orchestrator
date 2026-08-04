@@ -327,6 +327,10 @@ def gate(document: str, catalog: dict, skeleton: str | None = None,
                 return _keep(raw)
             # 캡션은 **여기서** 만든다. 프리즘이 쓰는 자리가 아니다.
             text = (f"![{fig['alt']}]({fig['path']})\n\n*{fig['caption']}*")
+            # 3D 뷰는 본체가 HTML 이라 마크다운이 그리지 못한다(D-59). 정지 화면을 걸고
+            # **돌려 보기는 링크로** 보낸다 — 링크도 결정론이다. 프리즘이 쓰지 않는다.
+            if fig.get("view_html"):
+                text += f"\n\n[돌려 보기 — 브라우저에서 열린다]({fig['view_html']})"
         else:
             text = {"v": e.get("render_with_unit", ""), "n": e.get("render", ""),
                     "u": e.get("unit", ""), "f": e.get("formula", ""),

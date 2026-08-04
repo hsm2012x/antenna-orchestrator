@@ -69,7 +69,46 @@ KINDS = {
     "stackup": ("figure_stackup", "스택업 단면", False,
                 "치수 정본 아님 — 층 구성을 **읽기 쉽게** 그린 모식도다. "
                 "두께 비율은 과장되어 있고 치수는 스택업 표에서 읽는다"),
+    # ── 렌더러가 여럿인 자리 ────────────────────────────────────────────────
+    "cad_vector": ("figure_cad_vector", "2D 벡터 레이아웃", True,
+                   "벡터 — 확대해도 깨지지 않는다. 축척은 뷰어의 확대율에 달렸다"),
+    "view3d":     ("figure_view3d", "오프라인 3D 뷰", False,
+                   "치수 정본 아님 — 돌려 보는 용도다. **본체는 옆의 링크**이고 위 그림은 "
+                   "정지 화면(요약의 3D 사시와 같은 장면)이다. 치수는 2D 도면에서 읽는다"),
+    "shape_rep":  ("figure_shape_rep", "형상 대표", False,
+                   "대표 그림 — 아래 캡션이 어느 렌더러의 것인지 말한다"),
 }
+
+# ── 형상 대표의 후보 렌더러 (D-59) ──────────────────────────────────────────
+#
+# ★ 왜 셋을 다 그리나
+#   같은 DXF 를 세 도구가 각각 그리고 있었는데, 문서로 가는 길은 하나뿐이라
+#   나머지 둘은 만들어 놓고 아무도 안 썼다. 무엇이 나은지는 **취향과 용도**의 문제라
+#   도구가 정할 수 없다(A-1). 그래서 셋을 다 그려 두고 사람이 고른다.
+#
+# ★ 왜 기본값이 있나
+#   고를 때까지 문서가 막히면 안 된다. 기본값이 서고, 대장에 "아직 안 골랐다"가 뜬다.
+VARIANTS = {
+    "raster": {
+        "label": "래스터 300dpi",
+        "renderer": "tools/render_page.py render_doc_2d",
+        "특징": "축척이 캡션에 실린다 · 치수 정본 · 어디서나 열린다",
+        "kind": "2d_overview",
+    },
+    "vector": {
+        "label": "벡터 SVG",
+        "renderer": "vendor_srs/cad_render.py render_svg",
+        "특징": "확대 무손실 · 파일이 작다 · 축척은 뷰어 확대율에 달렸다",
+        "kind": "cad_vector",
+    },
+    "view3d": {
+        "label": "오프라인 3D 뷰",
+        "renderer": "vendor_srs/cad_render.py render_html3d",
+        "특징": "돌려 볼 수 있다 · 폐쇄망에서 열린다(CDN 없음) · 치수 정본 아님",
+        "kind": "view3d",
+    },
+}
+DEFAULT_VARIANT = "raster"
 
 _TOP = re.compile(r"(?:^|[_\-])top(?:$|[_\-])", re.I)
 _BOT = re.compile(r"(?:^|[_\-])(?:bot|bottom)(?:$|[_\-])", re.I)
@@ -100,6 +139,7 @@ SKIP_ROLE = {
     "cad": ("figure_2d_overview", "2D/3D 도면 그림"),
     "stackup": ("figure_stackup", "스택업 단면 그림"),
     "array_factor": ("figure_array_factor", "배열인자 곡선"),
+    "shape_rep": ("figure_shape_rep", "형상 대표 그림"),
 }
 
 
@@ -315,6 +355,47 @@ def _skipped(work: Path, tg: dict, files: list[dict], has_af: bool,
     return out
 
 
+def chosen_variant(work: Path) -> tuple[str, str]:
+    """어느 렌더러를 형상 대표로 쓸 것인가. `(변형, 산지)`.
+
+    산지는 선언이다 — `registry/declared/<제품>.yaml` 의 `figure_preference.shape`.
+    도구가 고르지 않는다(A-1). 선언이 없으면 기본값을 쓰고 **그 사실을 함께 돌려준다** —
+    "기본값이라서 이것"과 "사람이 골라서 이것"은 다른 상태이고, 문서가 그것을 말해야 한다.
+    """
+    ver = C.read_json(work / "해석_결과.json") if (work / "해석_결과.json").exists() else {}
+    pref = ((ver.get("requirements") or {}).get("figure_preference") or {}).get("shape")
+    if pref in VARIANTS:
+        return pref, "선언"
+    return DEFAULT_VARIANT, "기본값"
+
+
+def _variant_pool(work: Path, out_dir: Path, raster: dict | None,
+                  snapshot: dict | None) -> list[dict]:
+    """후보 셋을 한 목록으로. **있는 것만** 담는다 — 없는 것을 선택지로 내놓지 않는다."""
+    rd = wd_render(work)
+    pool = []
+    if raster:
+        pool.append({"variant": "raster", **VARIANTS["raster"],
+                     "path": raster["figure"]["path"], "fs_path": raster["figure"]["fs_path"],
+                     "key": raster["key"]})
+    svg = rd / "layout_2d.svg"
+    if svg.exists():
+        pool.append({"variant": "vector", **VARIANTS["vector"],
+                     "path": "render/layout_2d.svg", "fs_path": "render/layout_2d.svg",
+                     "key": "그림.벡터레이아웃"})
+    html = rd / "view_3d.html"
+    if html.exists():
+        # 본체는 HTML 이고 마크다운은 그것을 그리지 못한다. 정지 화면(3D 사시)을 얹어
+        # 종이로 뽑아도 형상이 남게 하고, 돌려 보기는 링크로 보낸다.
+        pool.append({"variant": "view3d", **VARIANTS["view3d"],
+                     "path": (snapshot or {}).get("path") or "render/view_3d.html",
+                     "fs_path": "render/view_3d.html",
+                     "snapshot": (snapshot or {}).get("path"),
+                     "view_html": "render/view_3d.html",
+                     "key": "그림.3D뷰"})
+    return pool
+
+
 def build(run_id: str, work: Path | None = None) -> dict:
     """원천을 렌더하고 그림 항목을 만든다. **실패는 실패로 남긴다**(T-4).
 
@@ -400,8 +481,61 @@ def build(run_id: str, work: Path | None = None) -> dict:
         failed.append({"target": "스택업", "stage": "stackup",
                        "why": f"{type(e).__name__}: {e}"[:200]})
 
+    # ── 형상 대표 — 셋을 다 그려 놓고 **사람이 고른 것**을 세운다 (D-59) ────
+    #
+    # 여기까지 오면 세 렌더러의 산출이 모두 디스크에 있다. 그런데 지금까지 문서로 가는
+    # 길은 render_page 것 하나뿐이었고, cad_render 의 벡터·3D 뷰는 만들어 놓고 아무도
+    # 안 썼다(결함 F-42). 셋을 한 후보 목록으로 묶고, 고른 것을 대표 자리에 세운다.
+    raster = next((e for e in entries if e["figure"]["kind"] == "2d_overview"), None)
+    snap = next((e for e in entries if e["figure"]["kind"] == "3d_iso"), None)
+    pool = _variant_pool(work, out_dir, raster, snap and snap["figure"])
+    variant, 산지 = chosen_variant(work)
+    picked = next((v for v in pool if v["variant"] == variant), None)
+    if picked is None and pool:          # 고른 것이 이번 run 에 없으면 있는 것으로 선다
+        picked, 산지 = pool[0], f"{산지} → 대체(고른 '{variant}' 가 이번 run 에 없다)"
+    if picked:
+        rep = _entry("shape_rep", "그림.형상대표", (work / picked["fs_path"]), out_dir,
+                     f"{picked['renderer']} · 대표 선택 산지: {산지}",
+                     f"{picked['label']} — {picked['특징']}",
+                     {"variant": picked["variant"], "선택_산지": 산지,
+                      **({"view_html": picked["view_html"]} if picked.get("view_html") else {}),
+                      **({"snapshot": picked["snapshot"]} if picked.get("snapshot") else {})})
+        if picked.get("path"):            # 스냅샷이 따로 있으면 본문에 그것을 건다
+            rep["render"] = rep["render_with_unit"] = picked["path"]
+            rep["figure"]["path"] = picked["path"]
+        entries.append(rep)
+        # 고른 것은 대표 자리로 갔다 — 제 자리에 또 실어 같은 그림을 두 번 보이지 않는다
+        entries = [e for e in entries
+                   if not (e is not rep and e["figure"]["path"] == rep["figure"]["path"])]
+
+    # 안 고른 후보도 문서에 자리가 있다 — 대표가 아닐 뿐 없는 것이 아니다
+    for v in pool:
+        if picked and v["variant"] == picked["variant"]:
+            continue
+        if v["variant"] == "vector":
+            entries.append(_entry("cad_vector", v["key"], work / v["fs_path"], out_dir,
+                                  v["renderer"], v["특징"]))
+        elif v["variant"] == "view3d":
+            e = _entry("view3d", v["key"], work / (v.get("snapshot") or v["fs_path"]),
+                       out_dir, v["renderer"], v["특징"],
+                       {"view_html": v["view_html"], "snapshot": v.get("snapshot")})
+            if v.get("snapshot"):
+                e["render"] = e["render_with_unit"] = v["snapshot"]
+                e["figure"]["path"] = v["snapshot"]
+            entries.append(e)
+
     skipped = _skipped(work, tg, files, has_af, stack_why)
+    if len(pool) > 1 and 산지 == "기본값":
+        skipped.append(_skip("shape_rep",
+                             "형상 대표를 아직 고르지 않았다 — 후보 "
+                             + " · ".join(f"{v['variant']}({v['label']})" for v in pool)
+                             + f". 지금은 기본값 '{DEFAULT_VARIANT}' 가 서 있다. "
+                             "figure_variants 로 셋을 보고 figure_choose 로 고른다",
+                             "선언", "설계",
+                             "registry/declared/<제품>.yaml — figure_preference.shape"))
     res = {"run_id": run_id, "n_figures": len(entries), "n_failed": len(failed),
+           "variants": pool, "variant_chosen": picked and picked["variant"],
+           "variant_source": 산지,
            "n_skipped": len(skipped),
            "entries": entries, "failed": failed, "skipped": skipped, "targets": tg,
            "형상_판독불가": geometry_inventory(files),
@@ -502,9 +636,46 @@ def self_test() -> int:
 
     chk(f"그림 {r['n_figures']}건 생성", r["n_figures"] >= 7, str(r["n_figures"]))
     kinds = {e["figure"]["kind"] for e in r["entries"]}
-    chk("2D 전체도·상세·3D 두 시점이 모두 있다",
-        {"2d_overview", "2d_detail", "3d_iso", "3d_top"} <= kinds, str(sorted(kinds)))
+    # 전체도는 **대표 자리로 승격**된다(D-59) — 같은 그림을 두 번 싣지 않는다
+    chk("2D 상세·3D 두 시점이 있고 전체도는 대표로 선다",
+        {"2d_detail", "3d_iso", "3d_top", "shape_rep"} <= kinds, str(sorted(kinds)))
+    chk("승격된 그림을 제 자리에 또 싣지 않는다", "2d_overview" not in kinds,
+        str(sorted(kinds)))
     chk("DWG 는 내장 프리뷰로 들어온다", "dwg_preview" in kinds, str(sorted(kinds)))
+
+    # ── D-59 회귀 — 후보 셋을 다 그리고 **고른 것**을 세운다
+    pool = {v["variant"] for v in r["variants"]}
+    chk("후보 목록이 선다", "raster" in pool, str(sorted(pool)))
+    chk("고르기 전에는 기본값이고 그 사실을 말한다",
+        r["variant_chosen"] == DEFAULT_VARIANT and r["variant_source"] == "기본값",
+        f"{r['variant_chosen']} / {r['variant_source']}")
+    rep = next(e for e in r["entries"] if e["figure"]["kind"] == "shape_rep")
+    chk("대표 캡션이 **어느 렌더러의 것인지** 말한다",
+        "래스터" in rep["figure"]["caption"], rep["figure"]["caption"][:120])
+    chk("대표 출처에 선택 산지가 실린다", "선택 산지" in rep["source"], rep["source"])
+    if len(pool) > 1:
+        chk("안 고른 후보도 문서에 자리가 있다",
+            (kinds & {"cad_vector", "view3d"}) != set(), str(sorted(kinds)))
+        chk("안 골랐다는 사실이 대장으로 간다",
+            any(s["kind"] == "shape_rep" for s in r["skipped"]),
+            str([s["kind"] for s in r["skipped"]]))
+
+    # 사람이 고르면 그것이 선다 — 선언이 기본값을 이긴다
+    ver_p = work / "해석_결과.json"
+    if ver_p.exists() and "vector" in pool:
+        _v = C.read_json(ver_p)
+        _v.setdefault("requirements", {})["figure_preference"] = {"shape": "vector"}
+        C.write_json(ver_p, _v)
+        r_v = build("fig-selftest", work)
+        chk("선언이 기본값을 이긴다",
+            r_v["variant_chosen"] == "vector" and r_v["variant_source"] == "선언",
+            f"{r_v['variant_chosen']} / {r_v['variant_source']}")
+        chk("골랐으면 대장에 안 고름 행이 없다",
+            not any(s["kind"] == "shape_rep" for s in r_v["skipped"]),
+            str([s["kind"] for s in r_v["skipped"]]))
+        _v["requirements"].pop("figure_preference", None)
+        C.write_json(ver_p, _v)
+        r = build("fig-selftest", work)
 
     # ── 치수 정본 여부가 항목에 실린다 — 이것이 캡션의 근거다
     d2 = [e for e in r["entries"] if e["figure"]["kind"].startswith("2d")]
