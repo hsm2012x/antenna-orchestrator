@@ -12,7 +12,7 @@
       "name": "antenna-orchestrator",
       "source": "./",
       "description": "Deterministic antenna document pipeline over MCP. The server never calls an LLM; the host model writes only between PROSE markers, so numbers cannot be invented.",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "author": {
         "name": "SRS AI Studio"
       },
